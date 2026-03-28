@@ -1,0 +1,187 @@
+name: Deploy Casa
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:        # also lets you trigger manually from the GitHub UI
+    inputs:
+      rollback:
+        description: 'Roll back to previous release?'
+        type: boolean
+        default: false
+
+jobs:
+  deploy:
+    name: Deploy to DigitalOcean
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+
+      # ── Checkout ────────────────────────────────────────────────────────────
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # ── PHP + Composer ───────────────────────────────────────────────────────
+      - name: Set up PHP 8.4
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, xml, curl, zip, gd, mysql, bcmath
+          coverage: none
+
+      - name: Cache Composer dependencies
+        uses: actions/cache@v4
+        with:
+          path: vendor
+          key: composer-${{ hashFiles('composer.lock') }}
+          restore-keys: composer-
+
+      - name: Install Composer dependencies (production)
+        run: composer install --no-dev --optimize-autoloader --no-interaction --quiet
+
+      # ── SSH key setup ────────────────────────────────────────────────────────
+      - name: Configure SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H "${{ secrets.SERVER_HOST }}" >> ~/.ssh/known_hosts
+
+      # ── Rollback (manual trigger only) ───────────────────────────────────────
+      - name: Rollback to previous release
+        if: ${{ github.event.inputs.rollback == 'true' }}
+        run: |
+          ssh -i ~/.ssh/deploy_key ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} bash << 'EOF'
+            set -e
+            DEPLOY_PATH="${{ secrets.DEPLOY_PATH }}"
+            RELEASES_PATH="$DEPLOY_PATH/releases"
+            CURRENT_LINK="$DEPLOY_PATH/current"
+            RELEASES=$(ls -1t "$RELEASES_PATH" 2>/dev/null)
+            COUNT=$(echo "$RELEASES" | grep -c .)
+            if [[ $COUNT -lt 2 ]]; then
+              echo "No previous release available."
+              exit 1
+            fi
+            PREV=$(echo "$RELEASES" | sed -n '2p')
+            ln -sfn "$RELEASES_PATH/$PREV" "$CURRENT_LINK"
+            cd "$CURRENT_LINK"
+            php artisan config:clear
+            php artisan view:clear
+            sudo systemctl reload php8.4-fpm
+            echo "✓ Rolled back to $PREV"
+          EOF
+
+      # ── Everything below only runs when NOT rolling back ─────────────────────
+      - name: Create release directory on server
+        if: ${{ github.event.inputs.rollback != 'true' }}
+        run: |
+          TIMESTAMP=$(date +%Y%m%d%H%M%S)
+          echo "TIMESTAMP=$TIMESTAMP" >> $GITHUB_ENV
+          echo "RELEASE_PATH=${{ secrets.DEPLOY_PATH }}/releases/$TIMESTAMP" >> $GITHUB_ENV
+          ssh -i ~/.ssh/deploy_key ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} \
+            "mkdir -p ${{ secrets.DEPLOY_PATH }}/releases/$TIMESTAMP"
+
+      - name: Sync files to server
+        if: ${{ github.event.inputs.rollback != 'true' }}
+        run: |
+          rsync -az --delete \
+            --exclude='.git' \
+            --exclude='.github' \
+            --exclude='.env' \
+            --exclude='node_modules' \
+            --exclude='storage/logs' \
+            --exclude='storage/framework/cache' \
+            --exclude='storage/framework/sessions' \
+            --exclude='storage/framework/views' \
+            --exclude='tests' \
+            --exclude='deploy' \
+            --exclude='deploy.sh' \
+            --exclude='deploy.config*' \
+            --exclude='docker-compose.yml' \
+            --exclude='*.md' \
+            -e "ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new" \
+            ./ "${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:${{ env.RELEASE_PATH }}/"
+
+      - name: Link shared .env and storage
+        if: ${{ github.event.inputs.rollback != 'true' }}
+        run: |
+          ssh -i ~/.ssh/deploy_key ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} bash << EOF
+            set -e
+            SHARED="${{ secrets.DEPLOY_PATH }}/shared"
+            RELEASE="${{ env.RELEASE_PATH }}"
+
+            ln -sf \$SHARED/.env \$RELEASE/.env
+            rm -rf \$RELEASE/storage
+            ln -sf \$SHARED/storage \$RELEASE/storage
+            mkdir -p \$RELEASE/bootstrap/cache
+            chmod -R 775 \$RELEASE/bootstrap/cache
+          EOF
+
+      - name: Run artisan commands
+        if: ${{ github.event.inputs.rollback != 'true' }}
+        run: |
+          ssh -i ~/.ssh/deploy_key ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} bash << EOF
+            set -e
+            cd ${{ env.RELEASE_PATH }}
+
+            php artisan migrate --force
+            php artisan config:cache
+            php artisan route:cache
+            php artisan view:cache
+            php artisan storage:link --force
+
+            chown -R www-data:www-data ${{ env.RELEASE_PATH }}
+            find ${{ env.RELEASE_PATH }} -type f -exec chmod 644 {} \;
+            find ${{ env.RELEASE_PATH }} -type d -exec chmod 755 {} \;
+            chmod 755 ${{ env.RELEASE_PATH }}/artisan
+          EOF
+
+      - name: Activate release (atomic symlink swap)
+        if: ${{ github.event.inputs.rollback != 'true' }}
+        run: |
+          ssh -i ~/.ssh/deploy_key ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} \
+            "ln -sfn ${{ env.RELEASE_PATH }} ${{ secrets.DEPLOY_PATH }}/current"
+
+      - name: Reload services
+        if: ${{ github.event.inputs.rollback != 'true' }}
+        run: |
+          ssh -i ~/.ssh/deploy_key ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} \
+            "sudo systemctl reload php8.4-fpm && sudo systemctl reload nginx"
+
+      - name: Ensure scheduler cron is installed
+        if: ${{ github.event.inputs.rollback != 'true' }}
+        run: |
+          ssh -i ~/.ssh/deploy_key ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} bash << 'EOF'
+            CRON_FILE="/etc/cron.d/casa"
+            CRON_LINE="* * * * * ${{ secrets.SERVER_USER }} php ${{ secrets.DEPLOY_PATH }}/current/artisan schedule:run >> /dev/null 2>&1"
+            if [[ ! -f "$CRON_FILE" ]]; then
+              echo "$CRON_LINE" | sudo tee "$CRON_FILE" > /dev/null
+              sudo chmod 644 "$CRON_FILE"
+              echo "Cron job installed"
+            else
+              echo "Cron job already in place"
+            fi
+          EOF
+
+      - name: Prune old releases (keep 5)
+        if: ${{ github.event.inputs.rollback != 'true' }}
+        run: |
+          ssh -i ~/.ssh/deploy_key ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} bash << 'EOF'
+            cd "${{ secrets.DEPLOY_PATH }}/releases" 2>/dev/null || exit 0
+            ls -1t | tail -n +6 | xargs -r rm -rf
+            echo "Old releases pruned"
+          EOF
+
+      # ── Summary ──────────────────────────────────────────────────────────────
+      - name: Deployment summary
+        if: ${{ github.event.inputs.rollback != 'true' }}
+        run: |
+          echo "### ✅ Deploy complete" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| | |" >> $GITHUB_STEP_SUMMARY
+          echo "|---|---|" >> $GITHUB_STEP_SUMMARY
+          echo "| **Release** | \`${{ env.TIMESTAMP }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Commit** | \`${{ github.sha }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Triggered by** | ${{ github.actor }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Server** | \`${{ secrets.SERVER_HOST }}\` |" >> $GITHUB_STEP_SUMMARY

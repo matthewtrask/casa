@@ -1,0 +1,16 @@
+# =============================================================================
+# Casa deploy config — copy this file to deploy.config and fill in your values
+# deploy.config is gitignored and never committed
+# =============================================================================
+
+# Your DigitalOcean droplet IP or hostname
+SERVER_HOST=your.droplet.ip
+
+# SSH user (typically root for a fresh droplet, or a dedicated deploy user)
+SERVER_USER=root
+
+# Path to your SSH private key (the one whose public key is on the droplet)
+SSH_KEY=~/.ssh/id_ed25519
+
+# Where on the server the app should live
+DEPLOY_PATH=/var/www/casa
