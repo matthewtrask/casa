@@ -50,7 +50,7 @@ class PlantLookupController extends Controller
      */
     public function identify(Request $request): JsonResponse
     {
-        $request->validate(['photo' => 'required|file|max:20480|mimes:jpg,jpeg,png,gif,webp,heic,heif']);
+        $request->validate(['photo' => 'required|file|max:51200|mimes:jpg,jpeg,png,gif,webp,heic,heif']);
 
         // Step 1: Identify via PlantNet
         $identification = $this->plantNet->identify($request->file('photo'));

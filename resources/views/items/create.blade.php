@@ -409,17 +409,25 @@ photoInput.addEventListener('change', async function() {
 
             // heic-to decodes HEIC but may return PNG — run through canvas to
             // guarantee JPEG output and compress to a manageable file size.
-            const decoded = await heicTo({ blob: file, toType: 'image/jpeg', quality: 0.88 });
+            const decoded = await heicTo({ blob: file, toType: 'image/jpeg', quality: 0.75 });
             const blob    = await new Promise((resolve, reject) => {
                 const img    = new Image();
                 const objUrl = URL.createObjectURL(decoded);
                 img.onload = () => {
+                    // Scale down if the image is very large (max 2048px on longest side)
+                    let w = img.naturalWidth, h = img.naturalHeight;
+                    const maxDim = 2048;
+                    if (w > maxDim || h > maxDim) {
+                        const ratio = Math.min(maxDim / w, maxDim / h);
+                        w = Math.round(w * ratio);
+                        h = Math.round(h * ratio);
+                    }
                     const canvas  = document.createElement('canvas');
-                    canvas.width  = img.naturalWidth;
-                    canvas.height = img.naturalHeight;
-                    canvas.getContext('2d').drawImage(img, 0, 0);
+                    canvas.width  = w;
+                    canvas.height = h;
+                    canvas.getContext('2d').drawImage(img, 0, 0, w, h);
                     URL.revokeObjectURL(objUrl);
-                    canvas.toBlob(b => b ? resolve(b) : reject(new Error('canvas toBlob failed')), 'image/jpeg', 0.88);
+                    canvas.toBlob(b => b ? resolve(b) : reject(new Error('canvas toBlob failed')), 'image/jpeg', 0.75);
                 };
                 img.onerror = () => { URL.revokeObjectURL(objUrl); reject(new Error('decoded image failed to load')); };
                 img.src = objUrl;

@@ -7,6 +7,16 @@ use App\Http\Controllers\ActionLogController;
 use App\Http\Controllers\PlantLookupController;
 use App\Http\Controllers\SettingsController;
 
+// ── Temporary diagnostics (REMOVE AFTER USE) ─────────────────────────────────
+Route::get('/php-limits', function () {
+    return response()->json([
+        'upload_max_filesize' => ini_get('upload_max_filesize'),
+        'post_max_size'       => ini_get('post_max_size'),
+        'memory_limit'        => ini_get('memory_limit'),
+        'max_execution_time'  => ini_get('max_execution_time'),
+    ]);
+});
+
 // ── Auth (public) ─────────────────────────────────────────────────────────────
 Route::get('/login', [AuthController::class, 'showLogin'])->name('login');
 Route::post('/login', [AuthController::class, 'login']);

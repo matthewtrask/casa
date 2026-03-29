@@ -12,7 +12,7 @@ class UserSeeder extends Seeder
     {
         // Matt
         User::firstOrCreate(
-            ['email' => 'mjftrask@gmail.com'],
+            ['email' => 'test@gmail.com'],
             [
                 'name'     => 'Matt',
                 'password' => Hash::make(env('SEED_PASSWORD_MATT', 'change-me-immediately')),
@@ -21,9 +21,9 @@ class UserSeeder extends Seeder
 
         // Add your wife's email below
         User::firstOrCreate(
-            ['email' => 'your.wife@example.com'],
+            ['email' => 'test@gmail.com'],
             [
-                'name'     => 'Your Wife',   // ← update this
+                'name'     => 'Kieran',   // ← update this
                 'password' => Hash::make(env('SEED_PASSWORD_PARTNER', 'change-me-immediately')),
             ]
         );
