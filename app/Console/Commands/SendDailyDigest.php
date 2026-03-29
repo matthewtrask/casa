@@ -2,203 +2,204 @@
 
 namespace App\Console\Commands;
 
+use App\Models\Setting;
 use App\Models\TrackableItem;
 use Illuminate\Console\Command;
-use Illuminate\Support\Carbon;
 use GuzzleHttp\Client;
 
 class SendDailyDigest extends Command
 {
     protected $signature   = 'casa:send-digest';
-    protected $description = 'Post a plant watering digest to the #plants Slack channel';
+    protected $description = 'Post a daily home digest to Slack, routing each category to its own channel';
+
+    private array $categoryConfig = [
+        'plant'       => ['emoji' => '🌿', 'label' => 'Plants',      'overdue_icon' => ':rotating_light:', 'due_icon' => ':large_blue_circle:'],
+        'chore'       => ['emoji' => '🧹', 'label' => 'Chores',      'overdue_icon' => ':red_circle:',      'due_icon' => ':large_yellow_circle:'],
+        'maintenance' => ['emoji' => '🔧', 'label' => 'Maintenance', 'overdue_icon' => ':red_circle:',      'due_icon' => ':large_yellow_circle:'],
+        'pet'         => ['emoji' => '🐾', 'label' => 'Pets',        'overdue_icon' => ':red_circle:',      'due_icon' => ':large_blue_circle:'],
+        'other'       => ['emoji' => '📌', 'label' => 'Other',       'overdue_icon' => ':red_circle:',      'due_icon' => ':large_yellow_circle:'],
+    ];
 
     public function handle(): int
     {
-        $webhookUrl = config('services.slack.plants_webhook');
+        $token          = config('services.slack.bot_token');
+        $defaultChannel = Setting::get('slack_channel_default', '#all-casa');
 
-        if (! $webhookUrl) {
-            $this->error('SLACK_PLANTS_WEBHOOK is not configured.');
+        if (! $token) {
+            $this->error('SLACK_API_TOKEN is not set in .env.');
             return 1;
         }
 
-        // Load all plants
-        $plants = TrackableItem::where('category', 'plant')->get();
+        $allItems = TrackableItem::all();
 
-        if ($plants->isEmpty()) {
-            $this->info('No plants in the database — nothing to send.');
+        if ($allItems->isEmpty()) {
+            $this->info('No items in the database — nothing to send.');
             return 0;
         }
 
-        // Bucket plants into urgency groups
-        $overdue   = collect(); // past their watering date
-        $dueToday  = collect(); // due exactly today
-        $upcomingSoon = collect(); // due in the next 2 days
-        $allGood   = collect(); // fine for now
+        // Classify every item by urgency
+        $byCategory = [];
 
-        foreach ($plants as $plant) {
-            if ($plant->last_action_at === null) {
-                // Never watered — treat as overdue from day 1
-                $overdue->push($plant);
+        foreach ($allItems as $item) {
+            $category = $item->category;
+
+            if (! isset($byCategory[$category])) {
+                $byCategory[$category] = ['overdue' => collect(), 'dueToday' => collect(), 'upcomingSoon' => collect(), 'allGood' => collect()];
+            }
+
+            if ($item->last_action_at === null) {
+                $byCategory[$category]['overdue']->push($item);
                 continue;
             }
 
-            $nextDue   = $plant->last_action_at->copy()->addDays($plant->action_frequency_days);
+            $nextDue   = $item->last_action_at->copy()->addDays($item->action_frequency_days);
             $daysUntil = (int) now()->startOfDay()->diffInDays($nextDue->startOfDay(), false);
-            // Negative = overdue, 0 = due today, 1–2 = coming up, else = fine
 
-            if ($daysUntil < 0) {
-                $overdue->push($plant);
-            } elseif ($daysUntil === 0) {
-                $dueToday->push($plant);
-            } elseif ($daysUntil <= 2) {
-                $upcomingSoon->push($plant);
-            } else {
-                $allGood->push($plant);
+            if ($daysUntil < 0)       $byCategory[$category]['overdue']->push($item);
+            elseif ($daysUntil === 0) $byCategory[$category]['dueToday']->push($item);
+            elseif ($daysUntil <= 2)  $byCategory[$category]['upcomingSoon']->push($item);
+            else                      $byCategory[$category]['allGood']->push($item);
+        }
+
+        // Group categories by their resolved channel so we batch
+        // categories sharing the same channel into one message
+        $channelGroups = [];
+
+        foreach (array_keys($byCategory) as $category) {
+            $channel = Setting::get("slack_channel_{$category}") ?? $defaultChannel;
+            $channelGroups[$channel][] = $category;
+        }
+
+        $client     = new Client();
+        $errorCount = 0;
+
+        foreach ($channelGroups as $channel => $categories) {
+            $overdue      = collect();
+            $dueToday     = collect();
+            $upcomingSoon = collect();
+            $allGood      = collect();
+
+            foreach ($categories as $cat) {
+                $overdue->push(...$byCategory[$cat]['overdue']);
+                $dueToday->push(...$byCategory[$cat]['dueToday']);
+                $upcomingSoon->push(...$byCategory[$cat]['upcomingSoon']);
+                $allGood->push(...$byCategory[$cat]['allGood']);
+            }
+
+            $actionNeeded = $overdue->count() + $dueToday->count();
+
+            if ($actionNeeded === 0 && $upcomingSoon->isEmpty()) {
+                $label = implode(', ', array_map(fn($c) => $this->categoryConfig[$c]['label'] ?? $c, $categories));
+                $this->info("Skipping [{$label}] — everything up to date.");
+                continue;
+            }
+
+            $blocks = $this->buildBlocks($overdue, $dueToday, $upcomingSoon, $allGood, $categories);
+
+            try {
+                $response = $client->post('https://slack.com/api/chat.postMessage', [
+                    'headers' => [
+                        'Authorization' => 'Bearer ' . $token,
+                        'Content-Type'  => 'application/json; charset=utf-8',
+                    ],
+                    'json' => [
+                        'channel' => $channel,
+                        'blocks'  => $blocks,
+                    ],
+                ]);
+
+                $body = json_decode($response->getBody(), true);
+                $label = implode(', ', array_map(fn($c) => $this->categoryConfig[$c]['label'] ?? $c, $categories));
+
+                if ($body['ok'] ?? false) {
+                    $this->info("✓ Sent [{$label}] digest to {$channel} ({$actionNeeded} items need attention)");
+                } else {
+                    $this->error("Slack error for {$channel}: " . ($body['error'] ?? 'unknown'));
+                    $errorCount++;
+                }
+            } catch (\Exception $e) {
+                $this->error("Failed to post to {$channel}: {$e->getMessage()}");
+                $errorCount++;
             }
         }
 
-        $actionNeeded = $overdue->count() + $dueToday->count();
-
-        if ($actionNeeded === 0 && $upcomingSoon->isEmpty()) {
-            $this->info('All plants are happy — skipping Slack notification.');
-            return 0;
-        }
-
-        // Build the Slack message
-        $blocks = $this->buildBlocks($overdue, $dueToday, $upcomingSoon, $allGood);
-
-        try {
-            $client = new Client();
-            $response = $client->post($webhookUrl, ['json' => ['blocks' => $blocks]]);
-
-            if ($response->getStatusCode() === 200) {
-                $this->info("Slack digest sent! ({$actionNeeded} plants need water)");
-                return 0;
-            }
-
-            $this->error('Slack returned a non-200 response.');
-            return 1;
-        } catch (\Exception $e) {
-            $this->error('Failed to post to Slack: ' . $e->getMessage());
-            return 1;
-        }
+        return $errorCount > 0 ? 1 : 0;
     }
 
-    private function buildBlocks($overdue, $dueToday, $upcomingSoon, $allGood): array
+    private function buildBlocks($overdue, $dueToday, $upcomingSoon, $allGood, array $categories): array
     {
-        $today  = now()->format('l, F j');
-        $total  = $overdue->count() + $dueToday->count();
-        $blocks = [];
+        $today    = now()->format('l, F j');
+        $total    = $overdue->count() + $dueToday->count();
+        $isMulti  = count($categories) > 1;
+        $heading  = $isMulti ? '🏠 Casa Daily Digest' : ($this->categoryConfig[$categories[0]]['emoji'] . ' ' . ($this->categoryConfig[$categories[0]]['label'] ?? $categories[0]) . ' Digest');
+        $blocks   = [];
 
-        // Header
         $blocks[] = [
             'type' => 'header',
-            'text' => [
-                'type'  => 'plain_text',
-                'text'  => '🌿 Plant Care · ' . $today,
-                'emoji' => true,
-            ],
+            'text' => ['type' => 'plain_text', 'text' => $heading . ' · ' . $today, 'emoji' => true],
         ];
 
-        // Summary context line
         $summaryParts = [];
-        if ($overdue->isNotEmpty())  $summaryParts[] = $overdue->count()  . ' overdue';
-        if ($dueToday->isNotEmpty()) $summaryParts[] = $dueToday->count() . ' due today';
-        if ($upcomingSoon->isNotEmpty()) $summaryParts[] = $upcomingSoon->count() . ' coming up';
+        if ($overdue->isNotEmpty())      $summaryParts[] = $overdue->count() . ' overdue';
+        if ($dueToday->isNotEmpty())     $summaryParts[] = $dueToday->count() . ' due today';
+        if ($upcomingSoon->isNotEmpty()) $summaryParts[] = $upcomingSoon->count() . ' coming up soon';
 
         $summaryText = $total > 0
-            ? '💧 ' . implode(' · ', $summaryParts) . ' — time to get watering!'
-            : '✅ All plants are watered. A few to keep an eye on soon.';
+            ? '⚠️ ' . implode(' · ', $summaryParts)
+            : '✅ All caught up. A few things coming up soon.';
 
-        $blocks[] = [
-            'type' => 'context',
-            'elements' => [[
-                'type' => 'mrkdwn',
-                'text' => $summaryText,
-            ]],
-        ];
-
+        $blocks[] = ['type' => 'context', 'elements' => [['type' => 'mrkdwn', 'text' => $summaryText]]];
         $blocks[] = ['type' => 'divider'];
 
-        // Overdue plants — needs immediate attention
         if ($overdue->isNotEmpty()) {
             $lines = [];
-            foreach ($overdue as $plant) {
-                if ($plant->last_action_at === null) {
-                    $lines[] = "*{$plant->name}* ({$plant->location}) — never watered :rotating_light:";
-                } else {
-                    $nextDue  = $plant->last_action_at->copy()->addDays($plant->action_frequency_days);
-                    $daysAgo  = (int) now()->startOfDay()->diffInDays($nextDue->startOfDay(), false) * -1;
-                    $dayWord  = $daysAgo === 1 ? 'day' : 'days';
-                    $lines[]  = "*{$plant->name}* ({$plant->location}) — overdue by {$daysAgo} {$dayWord}";
+            foreach ($overdue->groupBy('category') as $category => $items) {
+                $cfg = $this->categoryConfig[$category] ?? $this->categoryConfig['other'];
+                foreach ($items as $item) {
+                    if ($item->last_action_at === null) {
+                        $lines[] = "{$cfg['emoji']} *{$item->name}* ({$item->location}) — never actioned {$cfg['overdue_icon']}";
+                    } else {
+                        $nextDue = $item->last_action_at->copy()->addDays($item->action_frequency_days);
+                        $daysAgo = abs((int) now()->startOfDay()->diffInDays($nextDue->startOfDay(), false));
+                        $word    = $daysAgo === 1 ? 'day' : 'days';
+                        $lines[] = "{$cfg['emoji']} *{$item->name}* ({$item->location}) — overdue by {$daysAgo} {$word} {$cfg['overdue_icon']}";
+                    }
                 }
             }
-
-            $blocks[] = [
-                'type' => 'section',
-                'text' => [
-                    'type' => 'mrkdwn',
-                    'text' => ":red_circle: *Needs water now*\n" . implode("\n", $lines),
-                ],
-            ];
+            $blocks[] = ['type' => 'section', 'text' => ['type' => 'mrkdwn', 'text' => "*Needs attention now*\n" . implode("\n", $lines)]];
         }
 
-        // Due today
         if ($dueToday->isNotEmpty()) {
             $lines = [];
-            foreach ($dueToday as $plant) {
-                $lines[] = "*{$plant->name}* ({$plant->location}) — every {$plant->action_frequency_days} days";
+            foreach ($dueToday->groupBy('category') as $category => $items) {
+                $cfg = $this->categoryConfig[$category] ?? $this->categoryConfig['other'];
+                foreach ($items as $item) {
+                    $lines[] = "{$cfg['due_icon']} {$cfg['emoji']} *{$item->name}* ({$item->location})";
+                }
             }
-
-            $blocks[] = [
-                'type' => 'section',
-                'text' => [
-                    'type' => 'mrkdwn',
-                    'text' => ":large_blue_circle: *Due today*\n" . implode("\n", $lines),
-                ],
-            ];
+            $blocks[] = ['type' => 'section', 'text' => ['type' => 'mrkdwn', 'text' => "*Due today*\n" . implode("\n", $lines)]];
         }
 
-        // Coming up soon
         if ($upcomingSoon->isNotEmpty()) {
             $lines = [];
-            foreach ($upcomingSoon as $plant) {
-                $nextDue  = $plant->last_action_at->copy()->addDays($plant->action_frequency_days);
-                $daysUntil = (int) now()->startOfDay()->diffInDays($nextDue->startOfDay(), false);
-                $when     = $daysUntil === 1 ? 'tomorrow' : 'in ' . $daysUntil . ' days';
-                $lines[]  = "*{$plant->name}* ({$plant->location}) — due {$when}";
+            foreach ($upcomingSoon->groupBy('category') as $category => $items) {
+                $cfg = $this->categoryConfig[$category] ?? $this->categoryConfig['other'];
+                foreach ($items as $item) {
+                    $nextDue   = $item->last_action_at->copy()->addDays($item->action_frequency_days);
+                    $daysUntil = (int) now()->startOfDay()->diffInDays($nextDue->startOfDay(), false);
+                    $when      = $daysUntil === 1 ? 'tomorrow' : "in {$daysUntil} days";
+                    $lines[]   = ":white_circle: {$cfg['emoji']} *{$item->name}* ({$item->location}) — due {$when}";
+                }
             }
-
-            $blocks[] = [
-                'type' => 'section',
-                'text' => [
-                    'type' => 'mrkdwn',
-                    'text' => ":white_circle: *Coming up soon*\n" . implode("\n", $lines),
-                ],
-            ];
+            $blocks[] = ['type' => 'section', 'text' => ['type' => 'mrkdwn', 'text' => "*Coming up soon*\n" . implode("\n", $lines)]];
         }
 
-        // All-good summary (just a count, not noisy)
         if ($allGood->isNotEmpty()) {
-            $blocks[] = [
-                'type' => 'context',
-                'elements' => [[
-                    'type' => 'mrkdwn',
-                    'text' => ":seedling: {$allGood->count()} " . ($allGood->count() === 1 ? 'plant is' : 'plants are') . ' all good.',
-                ]],
-            ];
+            $blocks[] = ['type' => 'context', 'elements' => [['type' => 'mrkdwn', 'text' => ":seedling: {$allGood->count()} " . ($allGood->count() === 1 ? 'item is' : 'items are') . ' all good.']]];
         }
 
         $blocks[] = ['type' => 'divider'];
-
-        // Footer
-        $blocks[] = [
-            'type' => 'context',
-            'elements' => [[
-                'type' => 'mrkdwn',
-                'text' => 'Sent by Casa 🏠 · Runs daily at 8 AM',
-            ]],
-        ];
+        $blocks[] = ['type' => 'context', 'elements' => [['type' => 'mrkdwn', 'text' => 'Sent by Casa 🏠 · Runs daily at 8 AM']]];
 
         return $blocks;
     }

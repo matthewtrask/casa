@@ -82,11 +82,47 @@ class PlantNetService
 
     /**
      * Prepare the image for upload.
-     * HEIC conversion is handled client-side; this just returns the file as-is.
+     * HEIC/HEIF files are converted to JPEG via Imagick before sending to PlantNet.
      * Returns [filePath, fileName, wasConverted].
      */
     protected function prepareImage(UploadedFile $image): array
     {
+        $ext  = strtolower($image->getClientOriginalExtension());
+        $mime = strtolower($image->getMimeType() ?? '');
+
+        $isHeic = in_array($ext, ['heic', 'heif'])
+               || in_array($mime, ['image/heic', 'image/heif', 'image/x-heic']);
+
+        if ($isHeic) {
+            $tmpPath = tempnam(sys_get_temp_dir(), 'casa_') . '.jpg';
+
+            // ffmpeg is already in the Docker image and handles all HEIC variants
+            // including those with auxiliary image references that trip up libheif.
+            exec('ffmpeg -y -i ' . escapeshellarg($image->getRealPath()) . ' -q:v 2 ' . escapeshellarg($tmpPath) . ' 2>&1', $out, $exitCode);
+
+            if ($exitCode === 0 && file_exists($tmpPath) && filesize($tmpPath) > 0) {
+                return [$tmpPath, 'photo.jpg', true];
+            }
+
+            // Fall back to Imagick if ffmpeg fails for any reason.
+            if (class_exists(\Imagick::class)) {
+                try {
+                    $imagick = new \Imagick();
+                    $imagick->readImage($image->getRealPath() . '[0]');
+                    $imagick->setImageFormat('jpeg');
+                    $imagick->setImageCompressionQuality(85);
+                    $imagick->stripImage();
+
+                    file_put_contents($tmpPath, $imagick->getImageBlob());
+                    $imagick->clear();
+
+                    return [$tmpPath, 'photo.jpg', true];
+                } catch (\ImagickException $e) {
+                    Log::info('HEIC conversion skipped, sending original to PlantNet: ' . $e->getMessage());
+                }
+            }
+        }
+
         return [$image->getRealPath(), $image->getClientOriginalName(), false];
     }
 }

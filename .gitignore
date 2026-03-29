@@ -3,6 +3,10 @@ deploy.config
 /public/hot
 /public/storage
 /storage/*.key
+/storage/logs/*.log
+/storage/framework/sessions/*
+/storage/framework/cache/*
+/storage/framework/views/*
 /vendor
 .env
 .env.backup

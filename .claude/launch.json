@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "casa-sail",
+      "runtimeExecutable": "./vendor/bin/sail",
+      "runtimeArgs": ["up"],
+      "port": 8000
+    }
+  ]
+}

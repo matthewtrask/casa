@@ -4,9 +4,11 @@ namespace App\Http\Controllers;
 
 use App\Models\TrackableItem;
 use Illuminate\Http\Request;
+use Illuminate\Http\UploadedFile;
 use Illuminate\View\View;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
 class TrackableItemController extends Controller
 {
@@ -41,12 +43,12 @@ class TrackableItemController extends Controller
             'category'              => 'required|in:plant,chore,maintenance,pet,other',
             'sunlight_needs'        => 'nullable|in:low,medium,high,direct',
             'notes'                 => 'nullable|string',
-            'photo'                 => 'nullable|file|image|max:20480',
+            'photo'                 => 'nullable|file|mimes:jpeg,jpg,png,gif,webp,heic,heif|max:20480',
             'last_action_at'        => 'nullable|date|before_or_equal:today',
         ]);
 
         if ($request->hasFile('photo')) {
-            $validated['image_path'] = $request->file('photo')->store('plants', config('filesystems.default'));
+            $validated['image_path'] = $this->storePhoto($request->file('photo'));
         }
 
         // Maintenance items: default date to today if not provided, and set a far-future frequency
@@ -89,15 +91,14 @@ class TrackableItemController extends Controller
             'category'              => 'required|in:plant,chore,maintenance,pet,other',
             'sunlight_needs'        => 'nullable|in:low,medium,high,direct',
             'notes'                 => 'nullable|string',
-            'photo'                 => 'nullable|file|image|max:20480',
+            'photo'                 => 'nullable|file|mimes:jpeg,jpg,png,gif,webp,heic,heif|max:20480',
         ]);
 
         if ($request->hasFile('photo')) {
-            // Delete old photo if it exists
             if ($item->image_path) {
                 Storage::disk(config('filesystems.default'))->delete($item->image_path);
             }
-            $validated['image_path'] = $request->file('photo')->store('plants', config('filesystems.default'));
+            $validated['image_path'] = $this->storePhoto($request->file('photo'));
         }
 
         unset($validated['photo']);
@@ -111,26 +112,60 @@ class TrackableItemController extends Controller
         if ($item->image_path) {
             Storage::disk(config('filesystems.default'))->delete($item->image_path);
         }
+        $category = $item->category;
         $item->delete();
-        return redirect()->route('items.index')->with('success', 'Item deleted successfully!');
+        return redirect()->route('items.index', ['category' => $category])->with('success', 'Item deleted successfully!');
+    }
+
+    private function storePhoto(UploadedFile $file): string
+    {
+        $isHeic = in_array(strtolower($file->getClientOriginalExtension()), ['heic', 'heif'])
+               || in_array(strtolower($file->getMimeType()), ['image/heic', 'image/heif']);
+
+        if ($isHeic) {
+            $tmpPath = tempnam(sys_get_temp_dir(), 'casa_') . '.jpg';
+
+            // ffmpeg is in the Docker image and handles all HEIC variants reliably.
+            exec('ffmpeg -y -i ' . escapeshellarg($file->getRealPath()) . ' -q:v 2 ' . escapeshellarg($tmpPath) . ' 2>&1', $out, $exitCode);
+
+            if ($exitCode === 0 && file_exists($tmpPath) && filesize($tmpPath) > 0) {
+                $filename = 'plants/' . Str::uuid() . '.jpg';
+                Storage::disk(config('filesystems.default'))->put($filename, file_get_contents($tmpPath));
+                unlink($tmpPath);
+                return $filename;
+            }
+
+            // Fall back to Imagick if ffmpeg fails for any reason.
+            if (class_exists(\Imagick::class)) {
+                try {
+                    $imagick = new \Imagick();
+                    $imagick->readImage($file->getRealPath() . '[0]');
+                    $imagick->setImageFormat('jpeg');
+                    $imagick->setImageCompressionQuality(85);
+                    $imagick->stripImage();
+
+                    $filename = 'plants/' . Str::uuid() . '.jpg';
+                    Storage::disk(config('filesystems.default'))->put($filename, $imagick->getImageBlob());
+                    $imagick->clear();
+
+                    return $filename;
+                } catch (\ImagickException) {
+                    // Store original HEIC as last resort.
+                }
+            }
+        }
+
+        return $file->store('plants', config('filesystems.default'));
     }
 
     public function dashboard(): View
     {
-        $categories = ['plant', 'chore', 'maintenance', 'pet', 'other'];
-        $groupedItems = [];
+        $items      = TrackableItem::all();
+        $recentLogs = \App\Models\ActionLog::with('trackableItem')
+                        ->latest()
+                        ->limit(8)
+                        ->get();
 
-        foreach ($categories as $category) {
-            $items = TrackableItem::where('category', $category)->get();
-            $due = $items->filter(fn ($item) => $item->isDue());
-            $groupedItems[$category] = [
-                'all'       => $items,
-                'due'       => $due,
-                'count'     => $items->count(),
-                'due_count' => $due->count(),
-            ];
-        }
-
-        return view('dashboard', compact('groupedItems'));
+        return view('dashboard', compact('items', 'recentLogs'));
     }
 }

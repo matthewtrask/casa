@@ -12,9 +12,10 @@ class ActionLogController extends Controller
     {
         $validated = $request->validate([
             'action_type' => 'required|string|max:255',
-            'performed_by' => 'required|string|max:255',
             'notes' => 'nullable|string',
         ]);
+
+        $validated['performed_by'] = auth()->user()->name;
 
         $item->actionLogs()->create($validated);
         $item->update(['last_action_at' => now()]);

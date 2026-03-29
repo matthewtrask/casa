@@ -1,263 +1,168 @@
 @extends('layouts.app')
-
-@section('title', 'Dashboard')
+@section('title', 'Home')
 
 @section('styles')
 <style>
-    .dashboard-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 2rem;
-    }
-
-    .dashboard-header h1 {
-        margin: 0;
-    }
-
-    .category-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-        gap: 2rem;
-        margin-bottom: 3rem;
-    }
-
-    .category-card {
-        background: white;
-        border-radius: 14px;
-        padding: 1.75rem;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 6px 20px rgba(0,0,0,0.07);
-        transition: transform 0.15s ease, box-shadow 0.15s ease;
-    }
-
-    .category-card:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 4px 8px rgba(0,0,0,0.08), 0 12px 32px rgba(0,0,0,0.1);
-    }
-
-    .category-card h2 {
-        font-size: 1.5rem;
-        margin-top: 0;
-        margin-bottom: 1rem;
-        color: #333;
-    }
-
-    .category-stats {
-        display: flex;
-        gap: 1rem;
-        margin-bottom: 1.5rem;
-    }
-
-    .stat-box {
-        flex: 1;
-        background: #f8f9fa;
-        padding: 1rem;
-        border-radius: 4px;
-        text-align: center;
-    }
-
-    .stat-number {
-        font-size: 2rem;
-        font-weight: 700;
-        color: #22863a;
-    }
-
-    .stat-label {
-        font-size: 0.85rem;
-        color: #666;
-        text-transform: uppercase;
-        margin-top: 0.25rem;
-    }
-
-    .items-list {
-        list-style: none;
-        padding: 0;
-        margin: 0;
-    }
-
-    .items-list li {
-        padding: 0.75rem 0;
-        border-bottom: 1px solid #eee;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-    }
-
-    .items-list li:last-child {
-        border-bottom: none;
-    }
-
-    .item-name {
-        flex: 1;
-    }
-
-    .item-location {
-        font-size: 0.85rem;
-        color: #666;
-        margin-left: 0.5rem;
-    }
-
-    .due-badge {
-        display: inline-block;
-        background: #f8d7da;
-        color: #721c24;
-        padding: 0.25rem 0.6rem;
-        border-radius: 4px;
-        font-size: 0.75rem;
+    .greeting { margin-bottom: 28px; }
+    .greeting-text {
+        font-family: var(--font-display);
+        font-size: 30px;
         font-weight: 600;
-        white-space: nowrap;
+        letter-spacing: -.5px;
+        line-height: 1.2;
     }
-
-    .no-items {
-        color: #666;
-        font-style: italic;
-        padding: 1rem 0;
-        text-align: center;
+    .greeting-sub { font-size: 14px; color: var(--text-muted); margin-top: 4px; }
+    .urgency-banner {
+        background: var(--critical-soft);
+        border: 1px solid #fecaca;
+        border-radius: var(--radius);
+        padding: 16px 20px;
+        margin-bottom: 28px;
+        display: flex;
+        align-items: center;
+        gap: 14px;
     }
-
-    .category-link {
-        display: inline-block;
-        margin-top: 1rem;
-        padding: 0.5rem 1rem;
-        background: #22863a;
-        color: white;
+    .urgency-banner-icon { font-size: 28px; flex-shrink: 0; }
+    .urgency-banner-text strong { display: block; color: #7f1d1d; font-size: 15px; font-weight: 600; margin-bottom: 2px; }
+    .urgency-banner-text span { font-size: 13px; color: #991b1b; }
+    html[data-theme="dark"] .urgency-banner { border-color: rgba(220,38,38,.35); }
+    html[data-theme="dark"] .urgency-banner-text strong { color: #fca5a5; }
+    html[data-theme="dark"] .urgency-banner-text span { color: #fca5a5; opacity: .8; }
+    .cat-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 12px;
+        margin-bottom: 32px;
+    }
+    @media (min-width: 600px) { .cat-grid { grid-template-columns: repeat(3, 1fr); } }
+    @media (min-width: 900px) { .cat-grid { grid-template-columns: repeat(5, 1fr); } }
+    .cat-card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 18px 16px;
         text-decoration: none;
-        border-radius: 4px;
-        font-weight: 600;
-        font-size: 0.9rem;
+        color: var(--text);
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        transition: box-shadow var(--ease), transform var(--ease);
+        position: relative;
+        overflow: hidden;
     }
-
-    .category-link:hover {
-        background: #1a6b2a;
+    .cat-card::before {
+        content: '';
+        position: absolute;
+        top: 0; left: 0; right: 0;
+        height: 3px;
+        background: var(--cat-color, #64748b);
     }
-
-    .summary-box {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
-        padding: 2rem;
-        border-radius: 14px;
-        margin-top: 2.5rem;
-        margin-bottom: 2rem;
-        box-shadow: 0 4px 20px rgba(102,126,234,0.3);
+    .cat-card:hover { box-shadow: var(--shadow-md); transform: translateY(-2px); }
+    .cat-card-emoji { font-size: 26px; line-height: 1; }
+    .cat-card-label { font-size: 12px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: .5px; }
+    .cat-card-count { font-family: var(--font-display); font-size: 32px; font-weight: 600; line-height: 1; }
+    .cat-card-due { font-size: 11px; font-weight: 600; color: var(--critical); background: var(--critical-soft); padding: 2px 8px; border-radius: 999px; width: fit-content; }
+    html[data-theme="dark"] .cat-card-due { color: #fca5a5; }
+    .cat-card-ok { font-size: 12px; color: var(--ok); font-weight: 500; }
+    .section-title { font-family: var(--font-display); font-size: 18px; font-weight: 600; margin-bottom: 14px; letter-spacing: -.2px; }
+    .activity-list { display: flex; flex-direction: column; }
+    .activity-item {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        padding: 12px 16px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        font-size: 14px;
     }
-
-    .summary-box h2 {
-        margin-top: 0;
-        font-size: 1.8rem;
-    }
-
-    .summary-stats {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-        gap: 1.5rem;
-        margin-top: 1rem;
-    }
-
-    .summary-stat {
-        text-align: center;
-    }
-
-    .summary-number {
-        font-size: 2.5rem;
-        font-weight: 700;
-    }
-
-    .summary-label {
-        font-size: 0.9rem;
-        opacity: 0.9;
-    }
+    .activity-item:first-child { border-radius: var(--radius-sm) var(--radius-sm) 0 0; }
+    .activity-item:last-child { border-radius: 0 0 var(--radius-sm) var(--radius-sm); }
+    .activity-item:only-child { border-radius: var(--radius-sm); }
+    .activity-item + .activity-item { border-top: none; }
+    .activity-emoji { font-size: 18px; flex-shrink: 0; }
+    .activity-name { font-weight: 500; flex: 1; }
+    .activity-meta { font-size: 12px; color: var(--text-muted); }
+    .empty-dash { text-align: center; padding: 56px 24px; }
+    .empty-dash-icon { font-size: 52px; margin-bottom: 14px; }
+    .empty-dash h3 { font-family: var(--font-display); font-size: 22px; color: var(--text); margin-bottom: 8px; }
+    .empty-dash p { font-size: 14px; color: var(--text-muted); }
 </style>
 @endsection
 
 @section('content')
-<div class="dashboard-header">
-    <h1>🏠 Dashboard</h1>
-    <a href="{{ route('items.create') }}" class="btn btn-primary">+ Add Item</a>
-</div>
-
 @php
-    $totalItems = 0;
-    $totalDue = 0;
-    foreach ($groupedItems as $category => $data) {
-        $totalItems += $data['count'];
-        $totalDue += $data['due_count'];
-    }
+    $items = $items ?? collect();
+    $catConfig = [
+        'plant'       => ['label' => 'Plants',      'emoji' => '🌿', 'color' => '#16a34a'],
+        'chore'       => ['label' => 'Chores',       'emoji' => '🧹', 'color' => '#3b82f6'],
+        'maintenance' => ['label' => 'Maintenance',  'emoji' => '🔧', 'color' => '#f59e0b'],
+        'pet'         => ['label' => 'Pets',         'emoji' => '🐾', 'color' => '#8b5cf6'],
+        'other'       => ['label' => 'Other',        'emoji' => '📌', 'color' => '#64748b'],
+    ];
+    $hour      = (int) now()->format('G');
+    $greeting  = $hour < 12 ? 'Good morning' : ($hour < 17 ? 'Good afternoon' : 'Good evening');
+    $firstName = explode(' ', auth()->user()->name)[0];
+    $totalDue  = $items->filter(fn($i) => $i->isDue())->count();
 @endphp
 
-<div class="summary-box">
-    <h2>Household Status</h2>
-    <div class="summary-stats">
-        <div class="summary-stat">
-            <div class="summary-number">{{ $totalItems }}</div>
-            <div class="summary-label">Total Items</div>
-        </div>
-        <div class="summary-stat">
-            <div class="summary-number">{{ $totalDue }}</div>
-            <div class="summary-label">Items Due</div>
-        </div>
-        <div class="summary-stat">
-            <div class="summary-number">{{ $totalItems - $totalDue }}</div>
-            <div class="summary-label">Current</div>
-        </div>
+<div class="greeting">
+    <div class="greeting-text">{{ $greeting }}, {{ $firstName }} 🏠</div>
+    <div class="greeting-sub">{{ now()->format('l, F j') }}</div>
+</div>
+
+@if ($totalDue > 0)
+<div class="urgency-banner">
+    <div class="urgency-banner-icon">⚠️</div>
+    <div class="urgency-banner-text">
+        <strong>{{ $totalDue }} {{ Str::plural('item', $totalDue) }} need{{ $totalDue === 1 ? 's' : '' }} attention</strong>
+        <span>Check each category below to see what's due.</span>
     </div>
 </div>
+@endif
 
-<div class="category-grid">
+<div class="cat-grid">
+    @foreach ($catConfig as $cat => $cfg)
     @php
-        $categoryEmojis = [
-            'plant' => '🌿',
-            'chore' => '🧹',
-            'maintenance' => '🔧',
-            'pet' => '🐾',
-            'other' => '📋',
-        ];
-
-        $categoryLabels = [
-            'plant' => 'Plants',
-            'chore' => 'Chores',
-            'maintenance' => 'Maintenance',
-            'pet' => 'Pets',
-            'other' => 'Other',
-        ];
+        $catItems = $items->where('category', $cat);
+        $due      = $catItems->filter(fn($i) => $i->isDue())->count();
     @endphp
-
-    @foreach (['plant', 'chore', 'maintenance', 'pet', 'other'] as $category)
-        <div class="category-card">
-            <h2>{{ $categoryEmojis[$category] }} {{ $categoryLabels[$category] }}</h2>
-
-            <div class="category-stats">
-                <div class="stat-box">
-                    <div class="stat-number">{{ $groupedItems[$category]['count'] }}</div>
-                    <div class="stat-label">Total</div>
-                </div>
-                <div class="stat-box">
-                    <div class="stat-number" style="color: #dc3545;">{{ $groupedItems[$category]['due_count'] }}</div>
-                    <div class="stat-label">Due</div>
-                </div>
-            </div>
-
-            @if ($groupedItems[$category]['all']->isEmpty())
-                <div class="no-items">No items in this category</div>
-            @else
-                <ul class="items-list">
-                    @foreach ($groupedItems[$category]['all'] as $item)
-                        <li style="@if ($item->isDue()) background-color: #fff3cd; padding: 0.5rem; margin: -0.75rem 0 0.75rem 0; border-radius: 4px; border-left: 3px solid #856404; @endif">
-                            <div class="item-name">
-                                <a href="{{ route('items.show', $item) }}" style="text-decoration: none; color: #333; font-weight: 500;">
-                                    {{ $item->name }}
-                                </a>
-                                <span class="item-location">{{ $item->location }}</span>
-                            </div>
-                            @if ($item->isDue())
-                                <span class="due-badge">DUE</span>
-                            @endif
-                        </li>
-                    @endforeach
-                </ul>
-            @endif
-
-            <a href="{{ route('items.index', ['category' => $category]) }}" class="category-link">View All</a>
-        </div>
+    <a href="{{ route('items.index', ['category' => $cat]) }}"
+       class="cat-card"
+       style="--cat-color: {{ $cfg['color'] }}">
+        <div class="cat-card-emoji">{{ $cfg['emoji'] }}</div>
+        <div class="cat-card-label">{{ $cfg['label'] }}</div>
+        <div class="cat-card-count">{{ $catItems->count() }}</div>
+        @if ($due > 0)
+            <div class="cat-card-due">{{ $due }} due</div>
+        @elseif ($catItems->count() > 0)
+            <div class="cat-card-ok">✓ All good</div>
+        @endif
+    </a>
     @endforeach
 </div>
+
+@if (isset($recentLogs) && $recentLogs->count() > 0)
+    <div class="section-title">Recent activity</div>
+    <div class="activity-list">
+        @foreach ($recentLogs as $log)
+        @php $emoji = $catConfig[$log->trackableItem->category ?? 'other']['emoji'] ?? '📌'; @endphp
+        <div class="activity-item">
+            <span class="activity-emoji">{{ $emoji }}</span>
+            <span class="activity-name">{{ $log->trackableItem->name ?? '—' }}</span>
+            <span class="activity-meta">{{ $log->action_type }} · {{ $log->created_at->diffForHumans() }}</span>
+        </div>
+        @endforeach
+    </div>
+@elseif ($items->isEmpty())
+    <div class="card">
+        <div class="empty-dash">
+            <div class="empty-dash-icon">🏡</div>
+            <h3>Welcome to Casa</h3>
+            <p>Start by adding your first plant, chore, or household item.</p>
+            <div style="margin-top:24px">
+                <a href="{{ route('items.create') }}" class="btn btn-primary btn-lg">Add your first item</a>
+            </div>
+        </div>
+    </div>
+@endif
 @endsection

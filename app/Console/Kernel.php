@@ -13,8 +13,7 @@ class Kernel extends ConsoleKernel
 
     protected function schedule(Schedule $schedule)
     {
-        $schedule->command('casa:send-digest')
-                 ->dailyAt('08:00');
+        // Scheduled in routes/console.php
     }
 
     protected function commands()

@@ -1,493 +1,332 @@
 @extends('layouts.app')
-@use('Illuminate\Support\Facades\Storage')
-
 @section('title', $item->name)
 
 @section('styles')
 <style>
-    /* ── Hero card ── */
-    .detail-card {
-        background: white;
-        border-radius: 16px;
-        padding: 2rem;
-        margin-bottom: 1.5rem;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 6px 20px rgba(0,0,0,0.07);
-    }
-
-    /* ── Header: photo + name + actions ── */
-    .detail-header {
-        display: flex;
-        gap: 1.5rem;
-        align-items: flex-start;
-        margin-bottom: 1.75rem;
-    }
-
-    .detail-photo {
-        width: 150px;
-        height: 150px;
-        object-fit: cover;
-        object-position: center;
-        border-radius: 14px;
-        flex-shrink: 0;
-        box-shadow: 0 2px 12px rgba(0,0,0,0.12);
-        display: block;
-    }
-
-    .detail-photo-placeholder {
-        width: 150px;
-        height: 150px;
-        border-radius: 14px;
-        flex-shrink: 0;
-        background: linear-gradient(145deg, #d1fae5, #a7f3d0);
+    .item-hero {
+        border-radius: var(--radius);
+        overflow: hidden;
+        margin-bottom: 20px;
+        position: relative;
+        background: var(--surface-2);
+        width: 100%;
+        height: 260px;
         display: flex;
         align-items: center;
         justify-content: center;
-        font-size: 4rem;
+        border: 1px solid var(--border);
     }
-
-    .detail-header-info {
-        flex: 1;
-        min-width: 0;
+    @media (min-width: 600px) { .item-hero { height: 340px; } }
+    html[data-theme="dark"] .item-hero { border-color: var(--border-strong); }
+    .item-hero img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
+    .item-hero-emoji { font-size: 80px; padding: 32px; }
+    .item-hero-status {
+        position: absolute;
+        bottom: 14px; right: 14px;
+        background: rgba(15,13,11,.72);
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
+        border-radius: 999px;
+        padding: 5px 11px;
+        border: 1px solid rgba(255,255,255,.1);
     }
-
-    .detail-name {
-        font-size: 1.75rem;
-        font-weight: 800;
-        color: #111827;
-        margin-bottom: 0.4rem;
-        line-height: 1.2;
+    .item-hero-status .status-badge {
+        background: transparent;
+        padding: 0;
+        color: #fff;
+        font-size: 13px;
+        font-weight: 600;
     }
-
-    .detail-subtitle {
-        font-size: 0.9rem;
-        color: #6b7280;
-        margin-bottom: 1rem;
-    }
-
-    /* Uniform action buttons */
-    .detail-actions {
+    .item-hero-status .status-dot { background: #4ade80; }
+    .item-hero-cat {
+        position: absolute;
+        top: 14px; left: 14px;
+        background: rgba(255,255,255,.88);
+        backdrop-filter: blur(6px);
+        -webkit-backdrop-filter: blur(6px);
+        padding: 4px 10px;
+        border-radius: 999px;
+        font-size: 12px;
+        font-weight: 600;
+        color: #2c2825;
         display: flex;
-        gap: 0.6rem;
+        align-items: center;
+        gap: 5px;
+    }
+    html[data-theme="dark"] .item-hero-cat {
+        background: rgba(30,28,25,.82);
+        color: var(--text);
+        border: 1px solid var(--border-strong);
+    }
+
+    .item-name {
+        font-family: var(--font-display);
+        font-size: 26px;
+        font-weight: 600;
+        letter-spacing: -.4px;
+        line-height: 1.2;
+        margin-bottom: 4px;
+    }
+    .item-header-row {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 20px;
         flex-wrap: wrap;
     }
+    .item-header-actions { display: flex; gap: 8px; flex-shrink: 0; }
 
-    .detail-actions form {
-        display: contents;
-    }
-
-    .detail-actions .btn {
-        height: 40px;
-        padding: 0 1.1rem;
-        display: inline-flex;
-        align-items: center;
-        gap: 0.35rem;
-        font-size: 0.875rem;
-        border-radius: 8px;
-        font-weight: 600;
-        white-space: nowrap;
-        cursor: pointer;
-        border: none;
-    }
-
-    .btn-outline {
-        background: white;
-        color: #374151;
-        border: 1.5px solid #e5e7eb !important;
-        text-decoration: none;
-    }
-
-    .btn-outline:hover {
-        background: #f9fafb;
-        border-color: #d1d5db !important;
-        color: #111827;
-    }
-
-    /* ── Info grid ── */
     .info-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-        gap: 1rem;
-        margin-bottom: 1.5rem;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 10px;
+        margin-bottom: 20px;
     }
-
-    .info-block {
-        background: #f9fafb;
-        border-radius: 10px;
-        padding: 0.85rem 1rem;
-        border-left: 3px solid #22863a;
+    @media (min-width: 600px) { .info-grid { grid-template-columns: repeat(4, 1fr); } }
+    .info-tile {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-sm);
+        padding: 14px;
     }
+    .info-tile-label { font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 4px; }
+    .info-tile-value { font-size: 15px; font-weight: 500; }
 
-    .info-block-label {
-        font-size: 0.7rem;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-        color: #9ca3af;
-        margin-bottom: 0.35rem;
+    .action-card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 20px;
+        margin-bottom: 20px;
     }
-
-    .info-block-value {
-        font-size: 1rem;
-        font-weight: 700;
-        color: #1f2937;
+    .action-card-title {
+        font-family: var(--font-display);
+        font-size: 17px;
+        font-weight: 600;
+        margin-bottom: 14px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
     }
-
-    /* ── Status banner ── */
-    .status-banner {
-        border-radius: 10px;
-        padding: 0.9rem 1.25rem;
-        text-align: center;
-        font-weight: 700;
-        font-size: 1rem;
-        margin-bottom: 1.25rem;
+    .action-card-due {
+        border-left: 3px solid var(--critical);
+        padding-left: 12px;
+        margin-bottom: 14px;
     }
+    .action-card-due strong { display: block; color: var(--critical); font-size: 14px; }
+    .action-card-due span { font-size: 13px; color: var(--text-muted); }
 
-    .status-banner.status-ok {
-        background: #d1fae5;
-        color: #065f46;
+    .notes-card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 18px 20px;
+        margin-bottom: 20px;
     }
+    .notes-card-title { font-size: 13px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 8px; }
+    .notes-card-body { font-size: 14px; line-height: 1.6; color: var(--text); }
 
-    .status-banner.status-warning {
-        background: #fef3c7;
-        color: #92400e;
-    }
-
-    .status-banner.status-critical {
-        background: #fee2e2;
-        color: #991b1b;
-    }
-
-    /* ── Notes ── */
-    .notes-block {
-        background: #fffbeb;
-        border: 1px solid #fde68a;
-        border-radius: 10px;
-        padding: 1rem 1.25rem;
-        margin-bottom: 1.25rem;
-        color: #78350f;
-        font-size: 0.9rem;
-        line-height: 1.6;
-    }
-
-    .notes-block strong {
-        display: block;
-        font-size: 0.75rem;
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-        color: #b45309;
-        margin-bottom: 0.35rem;
-    }
-
-    /* ── Water now section ── */
-    .water-now-section {
-        border-top: 1px solid #f3f4f6;
-        padding-top: 1.25rem;
-    }
-
-    .btn-water-large {
-        display: block;
-        width: 100%;
-        background: #22863a;
-        color: white;
-        border: none;
-        border-radius: 10px;
-        padding: 0.8rem;
-        font-size: 1rem;
-        font-weight: 700;
-        cursor: pointer;
-        transition: background 0.15s;
-        text-align: center;
-    }
-
-    .btn-water-large:hover { background: #1a6b2c; }
-
-    .note-toggle {
-        font-size: 0.8rem;
-        color: #9ca3af;
-        background: none;
-        border: none;
-        padding: 0.25rem 0;
-        cursor: pointer;
-        margin-top: 0.6rem;
-        display: block;
-        text-align: center;
-        width: 100%;
-        font-weight: normal;
-        transition: color 0.15s;
-    }
-
-    .note-toggle:hover { color: #6b7280; }
-
-    .note-field {
-        display: none;
-        margin-top: 0.75rem;
-    }
-
-    .note-field textarea {
-        width: 100%;
-        border: 1px solid #e5e7eb;
-        border-radius: 8px;
-        padding: 0.6rem 0.75rem;
-        font-size: 0.9rem;
-        font-family: inherit;
-        resize: vertical;
-        min-height: 70px;
-    }
-
-    .note-field textarea:focus {
-        outline: none;
-        border-color: #22863a;
-        box-shadow: 0 0 0 3px rgba(34,134,58,0.1);
-    }
-
-    /* ── History card ── */
-    .history-card {
-        background: white;
-        border-radius: 16px;
-        padding: 1.75rem 2rem;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 6px 20px rgba(0,0,0,0.07);
-    }
-
-    .history-card h2 {
-        font-size: 1.1rem;
-        font-weight: 700;
-        color: #374151;
-        margin-bottom: 1.25rem;
-    }
-
-    /* Timeline */
-    .timeline {
+    .timeline-title { font-family: var(--font-display); font-size: 17px; font-weight: 600; margin-bottom: 14px; }
+    .timeline { display: flex; flex-direction: column; gap: 0; }
+    .timeline-item {
+        display: flex;
+        gap: 14px;
+        padding-bottom: 16px;
         position: relative;
-        padding-left: 1.5rem;
     }
-
-    .timeline::before {
+    .timeline-item::before {
         content: '';
         position: absolute;
-        left: 0.35rem;
-        top: 0.5rem;
-        bottom: 0;
-        width: 2px;
-        background: #e5e7eb;
-        border-radius: 1px;
+        left: 15px; top: 30px; bottom: 0;
+        width: 1px;
+        background: var(--border);
     }
-
-    .timeline-entry {
-        position: relative;
-        margin-bottom: 1.1rem;
-        padding-bottom: 1.1rem;
-        border-bottom: 1px solid #f9fafb;
-    }
-
-    .timeline-entry:last-child {
-        margin-bottom: 0;
-        padding-bottom: 0;
-        border-bottom: none;
-    }
-
+    .timeline-item:last-child::before { display: none; }
     .timeline-dot {
-        position: absolute;
-        left: -1.15rem;
-        top: 0.25rem;
-        width: 10px;
-        height: 10px;
+        width: 30px; height: 30px;
         border-radius: 50%;
-        background: #22863a;
-        border: 2px solid white;
-        box-shadow: 0 0 0 2px #d1fae5;
+        background: var(--surface-2);
+        border: 2px solid var(--border);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 13px;
+        flex-shrink: 0;
     }
-
-    .timeline-performer {
-        font-weight: 700;
-        color: #1f2937;
-        font-size: 0.9rem;
-    }
-
-    .timeline-action {
-        display: inline-block;
-        background: #e0f2fe;
-        color: #0369a1;
-        padding: 0.1rem 0.5rem;
-        border-radius: 4px;
-        font-size: 0.75rem;
-        margin-left: 0.4rem;
-        font-weight: 600;
-    }
-
-    .timeline-date {
-        font-size: 0.78rem;
-        color: #9ca3af;
-        margin-top: 0.2rem;
-    }
-
-    .timeline-notes {
-        font-size: 0.85rem;
-        color: #6b7280;
-        margin-top: 0.35rem;
-        font-style: italic;
-    }
-
-    .empty-history {
-        text-align: center;
-        padding: 2rem;
-        color: #9ca3af;
-        font-size: 0.9rem;
-    }
-
-    @media (max-width: 600px) {
-        .detail-header { flex-direction: column; gap: 1rem; }
-        .detail-photo, .detail-photo-placeholder { width: 120px; height: 120px; }
-    }
+    .timeline-content { flex: 1; padding-top: 4px; }
+    .timeline-action { font-weight: 600; font-size: 14px; margin-bottom: 2px; }
+    .timeline-meta { font-size: 12px; color: var(--text-muted); }
+    .timeline-note { font-size: 13px; color: var(--text); margin-top: 4px; font-style: italic; }
+    .timeline-empty { font-size: 14px; color: var(--text-muted); }
 </style>
 @endsection
 
 @section('content')
+@php
+    $catConfig = [
+        'plant'       => ['label' => 'Plants',      'emoji' => '🌿', 'color' => '#16a34a'],
+        'chore'       => ['label' => 'Chores',       'emoji' => '🧹', 'color' => '#3b82f6'],
+        'maintenance' => ['label' => 'Maintenance',  'emoji' => '🔧', 'color' => '#f59e0b'],
+        'pet'         => ['label' => 'Pets',         'emoji' => '🐾', 'color' => '#8b5cf6'],
+        'other'       => ['label' => 'Other',        'emoji' => '📌', 'color' => '#64748b'],
+    ];
+    $cfg         = $catConfig[$item->category] ?? $catConfig['other'];
+    $statusClass = $item->getStatusCssClass();
+    $badgeClass  = match($statusClass) { 'status-ok' => 'badge-ok', 'status-warning' => 'badge-warning', default => 'badge-critical' };
+@endphp
 
-<div class="detail-card">
-
-    {{-- Header: photo + name + actions --}}
-    <div class="detail-header">
-
-        {{-- Profile photo --}}
-        @if ($item->image_path)
-            <img src="{{ Storage::url($item->image_path) }}"
-                 alt="{{ $item->name }}"
-                 class="detail-photo">
-        @else
-            <div class="detail-photo-placeholder">{{ $item->getCategoryEmoji() }}</div>
-        @endif
-
-        <div class="detail-header-info">
-            <div class="detail-name">{{ $item->name }}</div>
-            <div class="detail-subtitle">
-                {{ ucfirst($item->category instanceof \App\Enums\ItemCategory ? $item->category->value : $item->category) }}
-                @if ($item->location) · {{ $item->location }} @endif
-            </div>
-
-            {{-- Uniform action buttons --}}
-            <div class="detail-actions">
-                <a href="{{ route('items.edit', $item) }}" class="btn btn-secondary">✏️ Edit</a>
-                <form action="{{ route('items.destroy', $item) }}" method="POST">
-                    @csrf
-                    @method('DELETE')
-                    <button type="submit" class="btn btn-danger"
-                            onclick="return confirm('Delete {{ addslashes($item->name) }}? This cannot be undone.')">
-                        🗑 Delete
-                    </button>
-                </form>
-                <a href="{{ route('items.index', $item->category instanceof \App\Enums\ItemCategory ? ['category' => $item->category->value] : []) }}"
-                   class="btn btn-outline">
-                    ← Back
-                </a>
-            </div>
-        </div>
-    </div>
-
-    {{-- Info blocks --}}
-    <div class="info-grid">
-        <div class="info-block">
-            <div class="info-block-label">Location</div>
-            <div class="info-block-value">📍 {{ $item->location }}</div>
-        </div>
-
-        <div class="info-block">
-            <div class="info-block-label">{{ $item->isPlant() ? 'Watering' : 'Frequency' }}</div>
-            <div class="info-block-value">
-                @if ($item->isPlant()) 💧 @endif
-                Every {{ $item->action_frequency_days }} {{ Str::plural('day', $item->action_frequency_days) }}
-            </div>
-        </div>
-
-        @if ($item->isPlant() && $item->species)
-            <div class="info-block">
-                <div class="info-block-label">Species</div>
-                <div class="info-block-value" style="font-style:italic; font-size:0.9rem;">{{ $item->species }}</div>
-            </div>
-        @endif
-
-        @if ($item->isPlant() && $item->sunlight_needs)
-            @php
-                $sunlightLabel = match($item->sunlight_needs) {
-                    'low'    => '🌑 Low (shade)',
-                    'medium' => '⛅ Medium (indirect)',
-                    'high'   => '🌤 High (bright)',
-                    'direct' => '☀️ Direct (full sun)',
-                    default  => ucfirst($item->sunlight_needs),
-                };
-            @endphp
-            <div class="info-block">
-                <div class="info-block-label">Sunlight</div>
-                <div class="info-block-value">{{ $sunlightLabel }}</div>
-            </div>
-        @endif
-    </div>
-
-    {{-- Status banner --}}
-    <div class="status-banner {{ $item->getStatusCssClass() }}">
-        {{ $item->getStatusAttribute() }}
-    </div>
-
-    {{-- Notes --}}
-    @if ($item->notes)
-        <div class="notes-block">
-            <strong>Notes</strong>
-            {{ $item->notes }}
-        </div>
-    @endif
-
-    {{-- Water / action button --}}
-    @if ($item->isDue())
-        <div class="water-now-section">
-            <form action="{{ route('items.action', $item) }}" method="POST" id="action-form">
-                @csrf
-                <input type="hidden" name="action_type" value="{{ $item->getDueLabel() }}">
-                <input type="hidden" name="performed_by" value="Manual">
-                <textarea name="notes" id="action-notes" placeholder="Optional note…"
-                          style="display:none; width:100%; border:1px solid #e5e7eb; border-radius:8px; padding:0.6rem 0.75rem; font-size:0.9rem; font-family:inherit; resize:vertical; min-height:70px; margin-bottom:0.6rem;"></textarea>
-                <button type="submit" class="btn-water-large">
-                    ✓ Mark as {{ $item->getActionPastTense() }}
-                </button>
-            </form>
-            <button type="button" class="note-toggle" onclick="toggleNote(this)">
-                + Add a note
-            </button>
-        </div>
-    @endif
-
-</div>
-
-{{-- Action history --}}
-<div class="history-card">
-    <h2>📋 Action History</h2>
-
-    @if ($item->actionLogs->isEmpty())
-        <div class="empty-history">No actions logged yet.</div>
+{{-- Hero --}}
+<div class="item-hero">
+    @if ($item->image_path)
+        <img src="{{ Storage::url($item->image_path) }}" alt="{{ $item->name }}">
     @else
-        <div class="timeline">
-            @foreach ($item->actionLogs->sortByDesc('created_at') as $log)
-                <div class="timeline-entry">
-                    <div class="timeline-dot"></div>
-                    <div>
-                        <span class="timeline-performer">{{ $log->performed_by }}</span>
-                        <span class="timeline-action">{{ $log->action_type }}</span>
-                    </div>
-                    <div class="timeline-date">{{ $log->created_at->format('M d, Y \a\t g:i A') }}</div>
-                    @if ($log->notes)
-                        <div class="timeline-notes">{{ $log->notes }}</div>
-                    @endif
-                </div>
-            @endforeach
-        </div>
+        <div class="item-hero-emoji">{{ $cfg['emoji'] }}</div>
     @endif
+    <div class="item-hero-cat" style="color: {{ $cfg['color'] }}">
+        {{ $cfg['emoji'] }} {{ $cfg['label'] }}
+    </div>
+    <div class="item-hero-status">
+        <span class="status-badge {{ $badgeClass }}">
+            <span class="status-dot"></span>
+            {{ $item->status }}
+        </span>
+    </div>
 </div>
 
-<script>
-function toggleNote(btn) {
-    const textarea = document.getElementById('action-notes');
-    const visible = textarea.style.display !== 'none';
-    textarea.style.display = visible ? 'none' : 'block';
-    btn.textContent = visible ? '+ Add a note' : '− Remove note';
-    if (!visible) textarea.focus();
-}
-</script>
+{{-- Header --}}
+<div class="item-header-row">
+    <div>
+        <div class="item-name">{{ $item->name }}</div>
+        @if ($item->location)
+        <div style="font-size:13px; color:var(--text-muted); margin-top:2px;">📍 {{ $item->location }}</div>
+        @endif
+    </div>
+    <div class="item-header-actions">
+        <a href="{{ route('items.edit', $item) }}" class="btn btn-secondary">Edit</a>
+        <form method="POST" action="{{ route('items.destroy', $item) }}"
+              onsubmit="return confirm('Delete {{ $item->name }}? This cannot be undone.')">
+            @csrf @method('DELETE')
+            <button type="submit" class="btn btn-danger">Delete</button>
+        </form>
+    </div>
+</div>
+
+{{-- Info tiles --}}
+<div class="info-grid">
+    <div class="info-tile">
+        <div class="info-tile-label">Location</div>
+        <div class="info-tile-value">{{ $item->location ?: '—' }}</div>
+    </div>
+    <div class="info-tile">
+        <div class="info-tile-label">Frequency</div>
+        <div class="info-tile-value">Every {{ $item->action_frequency_days }} {{ Str::plural('day', $item->action_frequency_days) }}</div>
+    </div>
+    @if ($item->isPlant() && $item->species)
+    <div class="info-tile">
+        <div class="info-tile-label">Species</div>
+        <div class="info-tile-value">{{ $item->species }}</div>
+    </div>
+    @endif
+    @if ($item->isPlant())
+    @php
+        $sunMap = [
+            'low'    => ['label' => 'Low light',    'icon' => '🌑', 'bars' => 1],
+            'medium' => ['label' => 'Indirect',     'icon' => '🌤',  'bars' => 2],
+            'high'   => ['label' => 'Bright',       'icon' => '⛅',  'bars' => 3],
+            'direct' => ['label' => 'Full sun',     'icon' => '☀️',  'bars' => 4],
+        ];
+        $sun = $sunMap[$item->sunlight_needs] ?? null;
+    @endphp
+    <div class="info-tile">
+        <div class="info-tile-label">Sunlight</div>
+        @if ($sun)
+        <div class="info-tile-value" style="display:flex; align-items:center; gap:8px;">
+            <span style="font-size:18px; line-height:1;">{{ $sun['icon'] }}</span>
+            <div>
+                <div style="font-size:14px; font-weight:600;">{{ $sun['label'] }}</div>
+                <div style="display:flex; gap:3px; margin-top:4px;">
+                    @for ($i = 1; $i <= 4; $i++)
+                        <div style="width:14px; height:4px; border-radius:2px;
+                            background: {{ $i <= $sun['bars'] ? '#f59e0b' : 'var(--border)' }};"></div>
+                    @endfor
+                </div>
+            </div>
+        </div>
+        @else
+        <div class="info-tile-value" style="color:var(--text-muted); font-size:13px;">
+            Not set &mdash; <a href="{{ route('items.edit', $item) }}" style="color:inherit; text-decoration:underline;">edit to add</a>
+        </div>
+        @endif
+    </div>
+    @endif
+    <div class="info-tile">
+        <div class="info-tile-label">Last done</div>
+        <div class="info-tile-value">{{ $item->last_action_at ? $item->last_action_at->diffForHumans() : 'Never' }}</div>
+    </div>
+</div>
+
+{{-- Notes --}}
+@if ($item->notes)
+<div class="notes-card">
+    <div class="notes-card-title">Notes</div>
+    <div class="notes-card-body">{{ $item->notes }}</div>
+</div>
+@endif
+
+{{-- Action card --}}
+<div class="action-card">
+    <div class="action-card-title">
+        @if ($item->isDue())
+            ⚡ Action needed
+        @else
+            ✓ Log an action
+        @endif
+    </div>
+    @if ($item->isDue())
+    <div class="action-card-due">
+        <strong>{{ $item->status }}</strong>
+        <span>{{ $item->getDueLabel() }} it now to get back on track.</span>
+    </div>
+    @endif
+    <form method="POST" action="{{ route('items.action', $item) }}">
+        @csrf
+        <input type="hidden" name="action_type" value="{{ $item->getDueLabel() }}">
+        <div class="form-group">
+            <label class="form-label">Note (optional)</label>
+            <textarea name="notes" class="form-input" rows="2" placeholder="e.g. Used fertiliser, replaced filter..."></textarea>
+        </div>
+        @php
+            $dueLabel = $item->getDueLabel();
+            $pastTense = str_ends_with(strtolower($dueLabel), 'e') ? $dueLabel . 'd' : $dueLabel . 'ed';
+        @endphp
+        <button type="submit" class="btn btn-primary btn-lg btn-full"
+                style="background: {{ $cfg['color'] }}">
+            ✓ Mark as {{ $pastTense }}
+        </button>
+    </form>
+</div>
+
+{{-- Timeline --}}
+<div class="timeline-title">History</div>
+@if ($item->actionLogs->count() > 0)
+<div class="timeline">
+    @foreach ($item->actionLogs->sortByDesc('created_at') as $log)
+    <div class="timeline-item">
+        <div class="timeline-dot">{{ $cfg['emoji'] }}</div>
+        <div class="timeline-content">
+            <div class="timeline-action">{{ $log->action_type }}</div>
+            <div class="timeline-meta">
+                {{ $log->performed_by ?? 'Unknown' }} · {{ $log->created_at->format('M j, Y') }}
+            </div>
+            @if ($log->notes)
+            <div class="timeline-note">"{{ $log->notes }}"</div>
+            @endif
+        </div>
+    </div>
+    @endforeach
+</div>
+@else
+<p class="timeline-empty">No actions logged yet.</p>
+@endif
 @endsection

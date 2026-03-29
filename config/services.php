@@ -2,7 +2,7 @@
 
 return [
     'slack' => [
-        'plants_webhook' => env('SLACK_PLANTS_WEBHOOK'),
+        'bot_token' => env('SLACK_API_TOKEN'),
     ],
 
     'perenual' => [

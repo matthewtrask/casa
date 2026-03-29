@@ -1,669 +1,471 @@
 @extends('layouts.app')
+@section('title', 'Add Item')
 
-@section('title', 'Add New Item')
+@push('scripts')
+<script type="module">
+    import { heicTo } from 'https://unpkg.com/heic-to@1.4.2/dist/heic-to.js';
+    window._heicTo = heicTo;
+</script>
+@endpush
 
 @section('styles')
 <style>
-    .form-row {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 1.5rem;
-    }
+    .create-title { font-family: var(--font-display); font-size: 24px; font-weight: 600; letter-spacing: -.4px; margin-bottom: 24px; }
 
-    @media (max-width: 600px) {
-        .form-row {
-            grid-template-columns: 1fr;
-        }
+    .cat-picker { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 24px; }
+    @media (min-width: 500px) { .cat-picker { grid-template-columns: repeat(5, 1fr); } }
+    .cat-btn {
+        display: flex; flex-direction: column; align-items: center; gap: 6px;
+        padding: 14px 8px;
+        border: 2px solid var(--border);
+        border-radius: var(--radius-sm);
+        background: var(--surface);
+        cursor: pointer;
+        font-family: var(--font-body);
+        transition: all var(--ease);
+        min-height: 80px;
+        justify-content: center;
     }
+    .cat-btn:hover { border-color: var(--text); background: var(--surface-2); }
+    .cat-btn.selected { border-color: var(--cat-color, #2c2825); background: color-mix(in srgb, var(--cat-color, #2c2825) 8%, white); }
+    .cat-btn-emoji { font-size: 24px; line-height: 1; }
+    .cat-btn-label { font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: .4px; }
 
-    .conditional-field {
-        display: none;
+    .form-card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 20px;
+        margin-bottom: 16px;
     }
+    .form-card-title { font-size: 13px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 16px; }
 
-    .conditional-field.show {
-        display: block;
-    }
-
-    .plant-lookup-wrapper {
-        position: relative;
-    }
-
-    .plant-lookup-search {
+    .photo-upload {
+        border: 2px dashed var(--border);
+        border-radius: var(--radius-sm);
+        padding: 14px 16px;
         display: flex;
-        gap: 0.5rem;
-        margin-bottom: 0.5rem;
-    }
-
-    .plant-lookup-search input {
-        flex: 1;
-        margin: 0;
-    }
-
-    .plant-lookup-search button {
-        padding: 0.6rem 1rem;
-        background: #22863a;
-        color: white;
-        border: none;
-        border-radius: 4px;
-        cursor: pointer;
-        font-size: 0.9rem;
-        white-space: nowrap;
-    }
-
-    .plant-lookup-search button:hover {
-        background: #1a6b2c;
-    }
-
-    .plant-suggestions {
-        position: absolute;
-        top: 100%;
-        left: 0;
-        right: 0;
-        background: white;
-        border: 1px solid #ccc;
-        border-radius: 4px;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-        z-index: 100;
-        max-height: 220px;
-        overflow-y: auto;
-    }
-
-    .plant-suggestion-item {
-        padding: 0.75rem 1rem;
-        cursor: pointer;
-        border-bottom: 1px solid #f0f0f0;
-    }
-
-    .plant-suggestion-item:last-child {
-        border-bottom: none;
-    }
-
-    .plant-suggestion-item:hover {
-        background: #f0f8f0;
-    }
-
-    .plant-suggestion-item .common { font-weight: 600; color: #333; }
-    .plant-suggestion-item .scientific { font-size: 0.85rem; color: #666; font-style: italic; }
-
-    .autofill-banner {
-        background: #d4edda;
-        color: #155724;
-        border: 1px solid #c3e6cb;
-        border-radius: 4px;
-        padding: 0.6rem 1rem;
-        font-size: 0.9rem;
-        margin-bottom: 1rem;
-        display: none;
-    }
-
-    .photo-id-zone {
-        border: 2px dashed #c3e6cb;
-        border-radius: 8px;
-        padding: 1.5rem;
-        text-align: center;
-        background: #f8fff9;
-        margin-bottom: 1rem;
-        cursor: pointer;
-        transition: border-color 0.2s, background 0.2s;
-    }
-
-    .photo-id-zone:hover, .photo-id-zone.dragover {
-        border-color: #22863a;
-        background: #edfaef;
-    }
-
-    .photo-id-zone p { margin: 0.5rem 0 0; color: #555; font-size: 0.9rem; }
-    .photo-id-zone .icon { font-size: 2rem; }
-
-    .photo-preview {
-        max-width: 200px;
-        max-height: 200px;
-        border-radius: 6px;
-        margin: 0.75rem auto 0;
-        display: none;
-    }
-
-    .id-results {
-        margin-top: 0.75rem;
-        display: none;
-    }
-
-    .id-result-item {
-        display: flex;
-        justify-content: space-between;
         align-items: center;
-        padding: 0.75rem 1rem;
-        border: 1px solid #e0e0e0;
-        border-radius: 4px;
-        margin-bottom: 0.5rem;
-        background: white;
+        gap: 12px;
         cursor: pointer;
-        transition: background 0.15s;
-    }
-
-    .id-result-item:hover { background: #f0f8f0; border-color: #22863a; }
-
-    .id-result-item .result-name strong { display: block; color: #333; }
-    .id-result-item .result-name em { font-size: 0.85rem; color: #666; }
-    .id-result-item .result-score {
-        font-size: 0.85rem;
-        font-weight: 700;
-        color: #22863a;
-        white-space: nowrap;
-        margin-left: 1rem;
-    }
-
-    .id-spinner {
-        color: #555;
-        font-size: 0.9rem;
-        padding: 0.5rem;
-        display: none;
-    }
-
-    .or-divider {
-        text-align: center;
-        color: #999;
-        font-size: 0.85rem;
-        margin: 0.75rem 0;
+        transition: border-color var(--ease), background var(--ease);
         position: relative;
+        background: var(--surface-2);
     }
+    .photo-upload:hover { border-color: var(--text); background: var(--surface-3); }
+    .photo-upload input[type="file"] { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
+    .photo-upload-icon { font-size: 24px; flex-shrink: 0; }
+    .photo-upload-text { font-size: 14px; font-weight: 500; color: var(--text); margin-bottom: 2px; }
+    .photo-upload-hint { font-size: 12px; color: var(--text-muted); }
 
-    .or-divider::before, .or-divider::after {
-        content: '';
-        position: absolute;
-        top: 50%;
-        width: 42%;
-        height: 1px;
-        background: #ddd;
+    .photo-preview { display: none; align-items: center; gap: 12px; }
+    .photo-preview img { width: 80px; height: 80px; object-fit: cover; border-radius: var(--radius-sm); flex-shrink: 0; }
+    .photo-preview-change { font-size: 13px; color: var(--text-muted); cursor: pointer; text-decoration: underline; }
+
+    /* Plant identification results */
+    .identify-status { margin-top: 12px; font-size: 13px; color: var(--text-muted); display: none; align-items: center; gap: 8px; }
+    .identify-spinner { width: 14px; height: 14px; border: 2px solid var(--border); border-top-color: var(--text); border-radius: 50%; animation: spin .7s linear infinite; flex-shrink: 0; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .identify-results { margin-top: 14px; display: none; flex-direction: column; gap: 8px; }
+    .identify-result-label { font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 4px; }
+    .identify-card {
+        display: flex; align-items: center; justify-content: space-between; gap: 12px;
+        padding: 12px 14px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-sm);
+        background: var(--surface-2);
+        cursor: pointer;
+        transition: border-color var(--ease), background var(--ease);
     }
+    .identify-card:hover { border-color: var(--text); background: var(--surface-3); }
+    .identify-card.selected { border-color: #3a7232; background: rgba(58,114,50,.08); }
+    .identify-card-names { flex: 1; }
+    .identify-card-common { font-size: 14px; font-weight: 600; }
+    .identify-card-scientific { font-size: 12px; color: var(--text-muted); font-style: italic; }
+    .identify-card-meta { text-align: right; flex-shrink: 0; }
+    .identify-card-confidence { font-size: 12px; font-weight: 600; color: var(--text-muted); }
+    .identify-card-water { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+    .identify-error { margin-top: 10px; font-size: 13px; color: #dc2626; display: none; }
 
-    .or-divider::before { left: 0; }
-    .or-divider::after { right: 0; }
+    .freq-row { display: flex; align-items: center; gap: 12px; }
+    .freq-input { width: 80px; flex-shrink: 0; }
+    .freq-label { font-size: 14px; color: var(--text-muted); }
+
+    .sunlight-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+    .sunlight-opt { position: relative; }
+    .sunlight-opt input { position: absolute; opacity: 0; width: 0; height: 0; }
+    .sunlight-opt label {
+        display: flex; flex-direction: column; align-items: center; gap: 4px;
+        padding: 10px 6px;
+        border: 2px solid var(--border);
+        border-radius: var(--radius-sm);
+        cursor: pointer;
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--text-muted);
+        text-align: center;
+        transition: all var(--ease);
+        min-height: 64px;
+        justify-content: center;
+    }
+    .sunlight-opt input:checked + label { border-color: var(--maintenance); background: var(--maintenance-soft); color: #78350f; }
+    .sunlight-opt label:hover { border-color: var(--border-strong); }
+    .sunlight-opt-emoji { font-size: 20px; }
+    .sunlight-opt-text { text-transform: uppercase; letter-spacing: .4px; }
+
+    .submit-row { display: flex; gap: 10px; align-items: center; margin-top: 8px; }
+
+    /* Plant fields hidden by default */
+    .plant-field { display: none; }
 </style>
 @endsection
 
 @section('content')
-<div class="header">
-    <h1>➕ Add New Item</h1>
+<div class="create-title">Add a new item</div>
+
+<form method="POST" action="{{ route('items.store') }}" enctype="multipart/form-data" id="create-form">
+@csrf
+
+{{-- Category picker --}}
+<div class="form-group">
+    <label class="form-label">What are you adding?</label>
+    <div class="cat-picker">
+        @foreach ([
+            'plant'       => ['🌿', 'Plant',       '#16a34a'],
+            'chore'       => ['🧹', 'Chore',        '#3b82f6'],
+            'maintenance' => ['🔧', 'Maintenance',  '#f59e0b'],
+            'pet'         => ['🐾', 'Pet',          '#8b5cf6'],
+            'other'       => ['📌', 'Other',        '#64748b'],
+        ] as $cat => [$emoji, $label, $color])
+        <button type="button"
+                class="cat-btn {{ (old('category', request('category')) === $cat) ? 'selected' : '' }}"
+                style="--cat-color: {{ $color }}"
+                onclick="selectCategory('{{ $cat }}')">
+            <span class="cat-btn-emoji">{{ $emoji }}</span>
+            <span class="cat-btn-label">{{ $label }}</span>
+        </button>
+        @endforeach
+    </div>
+    <input type="hidden" name="category" id="category-input" value="{{ old('category', request('category', '')) }}">
+    @error('category') <p class="form-error">{{ $message }}</p> @enderror
 </div>
 
-<form action="{{ route('items.store') }}" method="POST" enctype="multipart/form-data" id="create-form">
-    @csrf
-
+{{-- Basic info --}}
+<div class="form-card">
+    <div class="form-card-title">Basic info</div>
     <div class="form-group">
-        <label for="name" id="name-label">Item Name *</label>
-        <input type="text" id="name" name="name" value="{{ old('name') }}" required>
-        @error('name')
-            <div class="error-message">{{ $message }}</div>
-        @enderror
+        <label class="form-label" for="name">Nickname</label>
+        <input type="text" id="name" name="name" class="form-input"
+               value="{{ old('name') }}" placeholder="e.g. Art Blakey, Miles Davis, Vacuuming" required>
+        @error('name') <p class="form-error">{{ $message }}</p> @enderror
     </div>
-
     <div class="form-group">
-        <label for="category">Category *</label>
-        <select id="category" name="category" required onchange="updateConditionalFields()">
-            <option value="">-- Select Category --</option>
-            <option value="plant"       @selected(old('category', $preselectedCategory ?? '') == 'plant')>🌿 Plant</option>
-            <option value="chore"       @selected(old('category', $preselectedCategory ?? '') == 'chore')>🧹 Chore</option>
-            <option value="maintenance" @selected(old('category', $preselectedCategory ?? '') == 'maintenance')>🔧 Maintenance</option>
-            <option value="pet"         @selected(old('category', $preselectedCategory ?? '') == 'pet')>🐾 Pet</option>
-            <option value="other"       @selected(old('category', $preselectedCategory ?? '') == 'other')>📋 Other</option>
-        </select>
-        @error('category')
-            <div class="error-message">{{ $message }}</div>
-        @enderror
+        <label class="form-label" for="location">Location</label>
+        <input type="text" id="location" name="location" class="form-input"
+               value="{{ old('location') }}" placeholder="e.g. Living room, Kitchen, Basement">
+        @error('location') <p class="form-error">{{ $message }}</p> @enderror
     </div>
-
-    <div class="form-group conditional-field" id="species-field">
-        <label>Species Lookup</label>
-        <div class="autofill-banner" id="autofill-banner">
-            ✅ Care details filled in — feel free to adjust!
-        </div>
-
-        {{-- Photo identification --}}
-        <div class="photo-id-zone" id="photo-drop-zone" onclick="document.getElementById('photo-upload-input').click()">
-            <div class="icon">📷</div>
-            <strong>Snap or drop a photo to identify</strong>
-            <p>PlantNet will identify the species automatically</p>
-            <img id="photo-preview" class="photo-preview" src="" alt="Preview">
-        </div>
-        <input type="file" id="photo-upload-input" accept="image/*,.heic,.heif" capture="environment" style="display:none">
-
-        <div class="id-spinner" id="id-spinner">🔍 Identifying plant…</div>
-
-        <div class="id-results" id="id-results">
-            <strong style="font-size:0.9rem;color:#555;">Top matches — click to use:</strong>
-            <div id="id-results-list"></div>
-        </div>
-
-        <div class="or-divider">or search by name</div>
-
-        {{-- Text search --}}
-        <div class="plant-lookup-wrapper">
-            <div class="plant-lookup-search">
-                <input type="text" id="plant-search-input" placeholder="Search by common or scientific name…" autocomplete="off">
-                <button type="button" onclick="searchPlants()">🔍 Look up</button>
-            </div>
-            <div class="plant-suggestions" id="plant-suggestions" style="display:none;"></div>
-        </div>
-
-        <input type="hidden" id="species" name="species" value="{{ old('species') }}">
-        <small style="color:#666;">Select a match above or fill in care details manually below.</small>
-        @error('species')
-            <div class="error-message">{{ $message }}</div>
-        @enderror
+    <div class="form-group plant-field" id="species-field">
+        <label class="form-label" for="species">Plant type</label>
+        <input type="text" id="species" name="species" class="form-input"
+               value="{{ old('species') }}" placeholder="e.g. Snake Plant · Sansevieria trifasciata">
     </div>
-
-    <div class="form-row">
-        <div class="form-group">
-            <label for="location">Location (Room) *</label>
-            <input type="text" id="location" name="location" value="{{ old('location') }}" placeholder="e.g., Living Room" required>
-            @error('location')
-                <div class="error-message">{{ $message }}</div>
-            @enderror
-        </div>
-
-        <div class="form-group" id="frequency-group">
-            <label for="action_frequency_days" id="frequency-label">Action Frequency (Days) *</label>
-            <input type="number" id="action_frequency_days" name="action_frequency_days" value="{{ old('action_frequency_days', 7) }}" min="1" max="3650" required>
-            @error('action_frequency_days')
-                <div class="error-message">{{ $message }}</div>
-            @enderror
-        </div>
-    </div>
-
-    <div class="form-group conditional-field" id="sunlight-field">
-        <label for="sunlight_needs">Sunlight Needs</label>
-        <select id="sunlight_needs" name="sunlight_needs">
-            <option value="">-- Select Sunlight Level --</option>
-            <option value="low" @selected(old('sunlight_needs') == 'low')>🌑 Low (Shade)</option>
-            <option value="medium" @selected(old('sunlight_needs') == 'medium')>⛅ Medium (Partial Sun)</option>
-            <option value="high" @selected(old('sunlight_needs') == 'high')>🌤 High (Bright)</option>
-            <option value="direct" @selected(old('sunlight_needs') == 'direct')>☀️ Direct (Full Sun)</option>
-        </select>
-        @error('sunlight_needs')
-            <div class="error-message">{{ $message }}</div>
-        @enderror
-    </div>
-
-    <div class="form-group conditional-field" id="last-watered-field">
-        <label for="last_action_at" id="last-action-label">💧 When did you last water it? <span style="font-weight:400;color:#888;">(optional)</span></label>
-        <input type="date" id="last_action_at" name="last_action_at"
-               value="{{ old('last_action_at') }}"
-               max="{{ date('Y-m-d') }}">
-        <small style="color:#888;" id="last-action-hint">Leave blank if you're not sure — you can log it later.</small>
-        @error('last_action_at')
-            <div class="error-message">{{ $message }}</div>
-        @enderror
-    </div>
-
     <div class="form-group">
-        <label for="photo">Photo</label>
-        <input type="file" id="photo-form-input" name="photo" accept="image/*,.heic,.heif" style="display:none">
-        <div id="photo-form-preview" style="display:none; margin-bottom:0.5rem;">
-            <img id="photo-form-img" src="" alt="Photo preview" style="max-width:200px; max-height:200px; border-radius:6px;">
-            <br><small style="color:#666;">Photo will be saved with this plant.</small>
+        <label class="form-label" for="action_frequency_days">How often?</label>
+        <div class="freq-row">
+            <input type="number" id="action_frequency_days" name="action_frequency_days"
+                   class="form-input freq-input"
+                   value="{{ old('action_frequency_days', 7) }}" min="1" max="365" required>
+            <span class="freq-label">days between each action</span>
         </div>
-        <button type="button" class="btn btn-secondary" onclick="document.getElementById('photo-form-input').click()" style="width:auto;">
-            📷 Choose photo
-        </button>
-        @error('photo')
-            <div class="error-message">{{ $message }}</div>
-        @enderror
+        @error('action_frequency_days') <p class="form-error">{{ $message }}</p> @enderror
+    </div>
+</div>
+
+{{-- Plant-only: sunlight --}}
+<div class="form-card plant-field" id="sunlight-card">
+    <div class="form-card-title">Sunlight needs</div>
+    <div class="sunlight-grid">
+        @foreach (['low' => ['🌑', 'Low'], 'medium' => ['🌤', 'Medium'], 'high' => ['☀️', 'High'], 'direct' => ['🌞', 'Direct']] as $val => [$sun_emoji, $sun_label])
+        <div class="sunlight-opt">
+            <input type="radio" name="sunlight_needs" id="sun-{{ $val }}" value="{{ $val }}"
+                   {{ old('sunlight_needs') === $val ? 'checked' : '' }}>
+            <label for="sun-{{ $val }}">
+                <span class="sunlight-opt-emoji">{{ $sun_emoji }}</span>
+                <span class="sunlight-opt-text">{{ $sun_label }}</span>
+            </label>
+        </div>
+        @endforeach
+    </div>
+</div>
+
+{{-- Notes --}}
+<div class="form-card">
+    <div class="form-card-title">Notes</div>
+    <div class="form-group" style="margin-bottom:0">
+        <textarea name="notes" class="form-input" rows="3"
+                  placeholder="Anything useful to remember...">{{ old('notes') }}</textarea>
+    </div>
+</div>
+
+{{-- Photo --}}
+<div class="form-card">
+    <div class="form-card-title">📷 Photo</div>
+    <div class="photo-upload" id="photo-drop">
+        <input type="file" name="photo" accept="image/jpeg,image/png,image/gif,image/webp,image/heic,image/heif,.heic,.heif,.jpg,.jpeg,.png" id="photo-input" capture="environment">
+        <div class="photo-upload-icon">📷</div>
+        <div>
+            <div class="photo-upload-text">Tap to take a photo or upload</div>
+            <div class="photo-upload-hint">JPEG · PNG · HEIC supported</div>
+        </div>
+    </div>
+    <div class="photo-preview" id="photo-preview">
+        <img id="photo-preview-img" src="" alt="Preview">
+        <div>
+            <div style="font-size:13px; font-weight:500; margin-bottom:4px;">Photo selected</div>
+            <span class="photo-preview-change" id="photo-change-btn">Tap to change</span>
+        </div>
     </div>
 
-    <div class="form-group">
-        <label for="notes">Notes</label>
-        <textarea id="notes" name="notes">{{ old('notes') }}</textarea>
-        @error('notes')
-            <div class="error-message">{{ $message }}</div>
-        @enderror
+    {{-- Identification status + results — only shown for plant category --}}
+    <div class="identify-status" id="identify-status">
+        <div class="identify-spinner"></div>
+        <span>Identifying plant…</span>
     </div>
+    <div class="identify-error" id="identify-error"></div>
+    <div class="identify-results" id="identify-results">
+        <div class="identify-result-label">🔍 We think this might be…</div>
+    </div>
+</div>
 
-    <div class="form-actions">
-        <button type="submit" class="btn btn-primary">Add Item</button>
-        <a href="{{ route('items.index') }}" class="btn btn-secondary">Cancel</a>
-    </div>
+<div class="submit-row">
+    <button type="submit" class="btn btn-primary btn-lg" style="flex:1">Add item</button>
+    <a href="{{ route('dashboard') }}" class="btn btn-secondary">Cancel</a>
+</div>
 </form>
 
 <script>
-function updateConditionalFields() {
-    const category = document.getElementById('category').value;
-    const speciesField    = document.getElementById('species-field');
-    const sunlightField   = document.getElementById('sunlight-field');
-    const frequencyGroup  = document.getElementById('frequency-group');
-    const frequencyLabel  = document.getElementById('frequency-label');
-    const freqInput       = document.getElementById('action_frequency_days');
-    const lastWateredField = document.getElementById('last-watered-field');
-    const lastActionLabel = document.getElementById('last-action-label');
-    const lastActionHint  = document.getElementById('last-action-hint');
-    const nameLabel       = document.getElementById('name-label');
-    const header          = document.querySelector('.header h1');
-
-    // Reset
-    speciesField.classList.remove('show');
-    sunlightField.classList.remove('show');
-    lastWateredField.classList.remove('show');
-    frequencyGroup.style.display = '';
-    freqInput.required = true;
-
-    if (category === 'plant') {
-        speciesField.classList.add('show');
-        sunlightField.classList.add('show');
-        lastWateredField.classList.add('show');
-        frequencyLabel.textContent = '💧 Watering Frequency (Days) *';
-        lastActionLabel.innerHTML  = '💧 When did you last water it? <span style="font-weight:400;color:#888;">(optional)</span>';
-        lastActionHint.textContent = 'Leave blank if you\'re not sure — you can log it later.';
-        nameLabel.textContent = 'Item Name *';
-        if (header) header.textContent = '🌿 Add a Plant';
-
-    } else if (category === 'maintenance') {
-        // Maintenance is a log — hide frequency, show date prominently
-        frequencyGroup.style.display = 'none';
-        freqInput.required = false;
-        freqInput.value = 3650; // far future — maintenance items never show as "due"
-        lastWateredField.classList.add('show');
-        lastActionLabel.innerHTML  = '📅 When did this happen? <span style="font-weight:400;color:#888;">(optional, defaults to today)</span>';
-        lastActionHint.textContent = 'Leave blank to use today\'s date.';
-        nameLabel.textContent = 'What was done? *';
-        if (header) header.textContent = '🔧 Log Maintenance Task';
-
-        // Default date to today if blank
-        const dateInput = document.getElementById('last_action_at');
-        if (!dateInput.value) dateInput.value = new Date().toISOString().split('T')[0];
-
-    } else {
-        frequencyLabel.textContent = 'Action Frequency (Days) *';
-        nameLabel.textContent = 'Item Name *';
-        if (header) header.textContent = '➕ Add New Item';
-    }
+function selectCategory(cat) {
+    document.getElementById('category-input').value = cat;
+    document.querySelectorAll('.cat-btn').forEach(b => b.classList.remove('selected'));
+    event.currentTarget.classList.add('selected');
+    const isPlant = cat === 'plant';
+    document.querySelectorAll('.plant-field').forEach(el => {
+        el.style.display = isPlant ? '' : 'none';
+    });
 }
 
-// Plant lookup
-let searchTimeout = null;
+// Init on page load
+(function() {
+    const val = document.getElementById('category-input').value;
+    if (val === 'plant') {
+        document.querySelectorAll('.plant-field').forEach(el => el.style.display = '');
+    }
+})();
 
-async function searchPlants() {
-    const query = document.getElementById('plant-search-input').value.trim();
-    if (query.length < 2) return;
+// Photo + plant identification
+const photoInput      = document.getElementById('photo-input');
+const photoDrop       = document.getElementById('photo-drop');
+const photoPreview    = document.getElementById('photo-preview');
+const photoImg        = document.getElementById('photo-preview-img');
+const identifyStatus  = document.getElementById('identify-status');
+const identifyError   = document.getElementById('identify-error');
+const identifyResults = document.getElementById('identify-results');
 
-    const suggestionsEl = document.getElementById('plant-suggestions');
-    suggestionsEl.style.display = 'block';
-    suggestionsEl.innerHTML = '<div style="padding:0.75rem 1rem;color:#666;">Searching…</div>';
+function currentCategory() {
+    return document.getElementById('category-input').value;
+}
+
+function resetIdentify() {
+    identifyStatus.style.display  = 'none';
+    identifyError.style.display   = 'none';
+    identifyResults.style.display = 'none';
+    // Remove previously rendered cards (keep the label div)
+    identifyResults.querySelectorAll('.identify-card').forEach(c => c.remove());
+}
+
+function applyResult(card) {
+    const common   = card.dataset.common;
+    const scientific = card.dataset.scientific;
+    const water    = card.dataset.water;
+    const sunlight = card.dataset.sunlight;
+
+    const speciesInput = document.querySelector('[name="species"]');
+    const freqInput    = document.querySelector('[name="action_frequency_days"]');
+    const sunInput     = document.querySelector('[name="sunlight_needs"]');
+
+    // Combine common + scientific into the species field.
+    // Leave name blank — the user gives their plant a nickname (e.g. Art Blakey).
+    if (speciesInput) {
+        if (common && scientific && common !== scientific) {
+            speciesInput.value = common + ' · ' + scientific;
+        } else {
+            speciesInput.value = common || scientific || '';
+        }
+    }
+    if (freqInput    && water)    freqInput.value   = water;
+    if (sunInput     && sunlight) sunInput.value    = sunlight;
+
+    identifyResults.querySelectorAll('.identify-card').forEach(c => c.classList.remove('selected'));
+    card.classList.add('selected');
+}
+
+async function identifyPlant(file) {
+    resetIdentify();
+    identifyStatus.style.display = 'flex';
+
+    const data = new FormData();
+    data.append('photo', file);
+    data.append('_token', document.querySelector('meta[name="csrf-token"]').content);
 
     try {
-        const res = await fetch(`/plants/search?q=${encodeURIComponent(query)}`);
-        const plants = await res.json();
-
-        if (!plants.length) {
-            suggestionsEl.innerHTML = '<div style="padding:0.75rem 1rem;color:#666;">No plants found. Try a different name.</div>';
-            return;
-        }
-
-        suggestionsEl.innerHTML = plants.map(p => `
-            <div class="plant-suggestion-item" onclick="selectPlant(${p.id}, '${escapeJs(p.common_name)}', '${escapeJs(p.scientific_name)}')">
-                <div class="common">${p.common_name}</div>
-                <div class="scientific">${p.scientific_name}</div>
-            </div>
-        `).join('');
-    } catch (e) {
-        suggestionsEl.innerHTML = '<div style="padding:0.75rem 1rem;color:#c00;">Lookup failed. Check your API key.</div>';
-    }
-}
-
-async function selectPlant(id, commonName, scientificName) {
-    // Close dropdown
-    document.getElementById('plant-suggestions').style.display = 'none';
-    document.getElementById('plant-search-input').value = `${commonName} (${scientificName})`;
-
-    // Set the hidden species field
-    document.getElementById('species').value = scientificName;
-
-    // Also set the item name if blank
-    const nameInput = document.getElementById('name');
-    if (!nameInput.value) nameInput.value = commonName;
-
-    // Fetch care details
-    try {
-        const res = await fetch(`/plants/care/${id}`);
-        const care = await res.json();
-
-        if (care.action_frequency_days) {
-            document.getElementById('action_frequency_days').value = care.action_frequency_days;
-        }
-        if (care.sunlight_needs) {
-            document.getElementById('sunlight_needs').value = care.sunlight_needs;
-        }
-        if (care.notes) {
-            const notesEl = document.getElementById('notes');
-            if (!notesEl.value) notesEl.value = care.notes;
-        }
-
-        document.getElementById('autofill-banner').style.display = 'block';
-    } catch (e) {
-        console.warn('Could not fetch care details:', e);
-    }
-}
-
-function escapeJs(str) {
-    return (str || '').replace(/'/g, "\\'").replace(/"/g, '\\"');
-}
-
-// Close suggestions when clicking outside
-document.addEventListener('click', (e) => {
-    const wrapper = document.querySelector('.plant-lookup-wrapper');
-    if (wrapper && !wrapper.contains(e.target)) {
-        document.getElementById('plant-suggestions').style.display = 'none';
-    }
-});
-
-// ── Photo identification ──────────────────────────────────────────
-
-document.addEventListener('DOMContentLoaded', () => {
-    updateConditionalFields();
-
-    document.getElementById('plant-search-input').addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') { e.preventDefault(); searchPlants(); }
-    });
-
-    // File input change
-    document.getElementById('photo-upload-input').addEventListener('change', (e) => {
-        const file = e.target.files[0];
-        if (file) handlePhotoFile(file);
-    });
-
-    // Drag and drop
-    const dropZone = document.getElementById('photo-drop-zone');
-    dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('dragover'); });
-    dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
-    dropZone.addEventListener('drop', (e) => {
-        e.preventDefault();
-        dropZone.classList.remove('dragover');
-        const file = e.dataTransfer.files[0];
-        if (file && file.type.startsWith('image/')) handlePhotoFile(file);
-    });
-});
-
-async function handlePhotoFile(file) {
-    // Show preview using original file
-    const preview = document.getElementById('photo-preview');
-    preview.src = URL.createObjectURL(file);
-    preview.style.display = 'block';
-
-    // Convert HEIC to JPEG client-side before uploading
-    const uploadFile = await maybeConvertToJpeg(file);
-
-    // Pre-populate the form's photo input so it saves with the plant
-    populateFormPhoto(uploadFile);
-
-    identifyPhoto(uploadFile);
-}
-
-function populateFormPhoto(file) {
-    const dt = new DataTransfer();
-    dt.items.add(file);
-    document.getElementById('photo-form-input').files = dt.files;
-
-    const img = document.getElementById('photo-form-img');
-    img.src = URL.createObjectURL(file);
-    document.getElementById('photo-form-preview').style.display = 'block';
-}
-
-// Also handle manual photo selection from the form input
-document.addEventListener('DOMContentLoaded', () => {
-    document.getElementById('photo-form-input').addEventListener('change', (e) => {
-        const file = e.target.files[0];
-        if (file) {
-            const img = document.getElementById('photo-form-img');
-            img.src = URL.createObjectURL(file);
-            document.getElementById('photo-form-preview').style.display = 'block';
-        }
-    });
-});
-
-/**
- * If the file is HEIC/HEIF, draw it to a canvas and export as JPEG.
- * Safari on iOS can decode HEIC natively; falls back to original on failure.
- */
-function maybeConvertToJpeg(file) {
-    const isHeic = /\.(heic|heif)$/i.test(file.name)
-        || file.type === 'image/heic'
-        || file.type === 'image/heif';
-
-    if (!isHeic) return Promise.resolve(file);
-
-    return new Promise((resolve) => {
-        const img = new Image();
-        const url = URL.createObjectURL(file);
-
-        img.onload = () => {
-            const canvas = document.createElement('canvas');
-            canvas.width = img.naturalWidth;
-            canvas.height = img.naturalHeight;
-            canvas.getContext('2d').drawImage(img, 0, 0);
-            URL.revokeObjectURL(url);
-
-            canvas.toBlob((blob) => {
-                if (blob) {
-                    const jpegName = file.name.replace(/\.(heic|heif)$/i, '.jpg');
-                    resolve(new File([blob], jpegName, { type: 'image/jpeg' }));
-                } else {
-                    resolve(file); // fallback
-                }
-            }, 'image/jpeg', 0.9);
-        };
-
-        img.onerror = () => {
-            URL.revokeObjectURL(url);
-            resolve(file); // fallback — send as-is and let server try
-        };
-
-        img.src = url;
-    });
-}
-
-async function identifyPhoto(file) {
-    const spinner = document.getElementById('id-spinner');
-    const resultsEl = document.getElementById('id-results');
-    const resultsList = document.getElementById('id-results-list');
-
-    spinner.style.display = 'block';
-    resultsEl.style.display = 'none';
-    resultsList.innerHTML = '';
-
-    const formData = new FormData();
-    formData.append('photo', file);
-    formData.append('_token', document.querySelector('meta[name="csrf-token"]')?.content
-        || '{{ csrf_token() }}');
-
-    try {
-        const res = await fetch('/plants/identify', { method: 'POST', body: formData });
-        const data = await res.json();
-
-        spinner.style.display = 'none';
-
-        if (data.error) {
-            resultsList.innerHTML = `<div style="color:#c00;padding:0.5rem">${data.error}</div>`;
-            resultsEl.style.display = 'block';
-            return;
-        }
-
-        resultsList.innerHTML = data.results.map(r => {
-            const commonName = r.common_names?.[0] ?? r.scientific_name;
-            const careAttr = r.care ? `data-care='${JSON.stringify(r.care)}'` : '';
-            const idAttr = r.perenual_id ? `data-perenual-id="${r.perenual_id}"` : '';
-            return `
-                <div class="id-result-item"
-                     onclick="applyIdentification('${escapeJs(r.scientific_name)}', '${escapeJs(commonName)}', this)"
-                     ${careAttr} ${idAttr}>
-                    <div class="result-name">
-                        <strong>${commonName}</strong>
-                        <em>${r.scientific_name}</em>
-                    </div>
-                    <div class="result-score">${r.score}% match</div>
-                </div>
-            `;
-        }).join('');
-
-        resultsEl.style.display = 'block';
-    } catch (e) {
-        spinner.style.display = 'none';
-        resultsList.innerHTML = '<div style="color:#c00;padding:0.5rem">Identification failed. Please try again.</div>';
-        resultsEl.style.display = 'block';
-    }
-}
-
-async function applyIdentification(scientificName, commonName, el) {
-    // Highlight selected immediately so it feels responsive
-    document.querySelectorAll('.id-result-item').forEach(i => i.style.background = '');
-    el.style.background = '#d4edda';
-
-    // Fill in species + name
-    document.getElementById('species').value = scientificName;
-    document.getElementById('plant-search-input').value = `${commonName} (${scientificName})`;
-
-    const nameInput = document.getElementById('name');
-    if (!nameInput.value) nameInput.value = commonName;
-
-    // Use pre-loaded care data if available, otherwise fetch from Perenual
-    const careJson = el.getAttribute('data-care');
-    const perenualId = el.getAttribute('data-perenual-id');
-
-    if (careJson) {
-        applyCareData(JSON.parse(careJson));
-    } else {
-        // Look up Perenual by scientific name
+        const res  = await fetch('{{ route("plants.identify") }}', {
+            method: 'POST',
+            headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+            credentials: 'same-origin',
+            body: data,
+        });
+        const text = await res.text();
+        let json;
         try {
-            el.style.opacity = '0.7';
-            const searchRes = await fetch(`/plants/search?q=${encodeURIComponent(scientificName)}`);
-            const plants = await searchRes.json();
+            json = JSON.parse(text);
+        } catch {
+            identifyStatus.style.display = 'none';
+            identifyError.textContent = `Server returned HTTP ${res.status} — ${text.substring(0, 120)}`;
+            identifyError.style.display = 'block';
+            return;
+        }
 
-            if (plants.length) {
-                const careRes = await fetch(`/plants/care/${plants[0].id}`);
-                const care = await careRes.json();
-                applyCareData(care);
-                // Cache it on the element for any re-clicks
-                el.setAttribute('data-care', JSON.stringify(care));
+        identifyStatus.style.display = 'none';
+
+        if (!res.ok || json.error) {
+            const msg = json.error
+                ?? json.message
+                ?? Object.values(json.errors ?? {})[0]?.[0]
+                ?? 'Could not identify — fill in details manually.';
+            identifyError.textContent   = msg;
+            identifyError.style.display = 'block';
+            return;
+        }
+
+        (json.results ?? []).forEach((r, i) => {
+            const common     = r.common_names?.[0] ?? r.scientific_name;
+            const water      = r.care?.watering_frequency_days ?? '';
+            const sunlight   = r.care?.sunlight ?? '';
+            const sunMap     = { 'full sun': 'high', 'part shade': 'medium', 'full shade': 'low' };
+            const sunVal     = sunMap[sunlight.toLowerCase()] ?? '';
+
+            const card = document.createElement('div');
+            card.className              = 'identify-card';
+            card.dataset.common         = common;
+            card.dataset.scientific     = r.scientific_name;
+            card.dataset.water          = water;
+            card.dataset.sunlight       = sunVal;
+            card.innerHTML = `
+                <div class="identify-card-names">
+                    <div class="identify-card-common">${common}</div>
+                    <div class="identify-card-scientific">${r.scientific_name}</div>
+                </div>
+                <div class="identify-card-meta">
+                    <div class="identify-card-confidence">${r.score}% match</div>
+                    ${water ? `<div class="identify-card-water">💧 every ${water}d</div>` : ''}
+                </div>`;
+
+            card.addEventListener('click', () => applyResult(card));
+
+            // Auto-apply top result
+            if (i === 0) {
+                identifyResults.appendChild(card);
+                applyResult(card);
+            } else {
+                identifyResults.appendChild(card);
             }
+        });
+
+        identifyResults.style.display = 'flex';
+    } catch(e) {
+        identifyStatus.style.display = 'none';
+        identifyError.textContent    = 'Identification failed: ' + (e?.message ?? e);
+        identifyError.style.display  = 'block';
+    }
+}
+
+photoInput.addEventListener('change', async function() {
+    let file = this.files[0];
+    if (!file) return;
+
+    // Convert HEIC/HEIF to JPEG using heic-to (libheif compiled to WebAssembly).
+    // Works in all browsers — Chrome, Firefox, Safari — no native HEIC support needed.
+    const isHeic = /heic|heif/i.test(file.type) || /\.(heic|heif)$/i.test(file.name);
+    let heicConverted = false;
+    if (isHeic) {
+        try {
+            identifyStatus.style.display = 'flex';
+            identifyStatus.querySelector('span').textContent = 'Converting photo…';
+
+            const heicTo = window._heicTo;
+            if (!heicTo) throw new Error('heic-to library not loaded');
+
+            // heic-to decodes HEIC but may return PNG — run through canvas to
+            // guarantee JPEG output and compress to a manageable file size.
+            const decoded = await heicTo({ blob: file, toType: 'image/jpeg', quality: 0.88 });
+            const blob    = await new Promise((resolve, reject) => {
+                const img    = new Image();
+                const objUrl = URL.createObjectURL(decoded);
+                img.onload = () => {
+                    const canvas  = document.createElement('canvas');
+                    canvas.width  = img.naturalWidth;
+                    canvas.height = img.naturalHeight;
+                    canvas.getContext('2d').drawImage(img, 0, 0);
+                    URL.revokeObjectURL(objUrl);
+                    canvas.toBlob(b => b ? resolve(b) : reject(new Error('canvas toBlob failed')), 'image/jpeg', 0.88);
+                };
+                img.onerror = () => { URL.revokeObjectURL(objUrl); reject(new Error('decoded image failed to load')); };
+                img.src = objUrl;
+            });
+            file = new File([blob], file.name.replace(/\.(heic|heif)$/i, '.jpg'), { type: 'image/jpeg' });
+            heicConverted = true;
+
+            identifyStatus.style.display = 'none';
+            identifyStatus.querySelector('span').textContent = 'Identifying plant…';
+
+            // Replace the file in the input so the form also submits the converted JPEG
+            const dt = new DataTransfer();
+            dt.items.add(file);
+            photoInput.files = dt.files;
         } catch (e) {
-            console.warn('Could not fetch care details from Perenual:', e);
-        } finally {
-            el.style.opacity = '1';
+            identifyStatus.style.display = 'none';
+            // Fall through — server will convert via ffmpeg, skip identification
+            heicConverted = false;
         }
     }
 
-    document.getElementById('autofill-banner').style.display = 'block';
-}
+    // Show thumbnail preview
+    const reader = new FileReader();
+    reader.onload = e => {
+        photoImg.src = e.target.result;
+        photoDrop.style.display    = 'none';
+        photoPreview.style.display = 'flex';
+    };
+    reader.readAsDataURL(file);
 
-function applyCareData(care) {
-    if (care.action_frequency_days) {
-        document.getElementById('action_frequency_days').value = care.action_frequency_days;
+    // Only identify if category is plant and we have a browser-converted JPEG.
+    // If HEIC conversion fell through to the server we can't identify here
+    // (the file in memory is still HEIC, which PlantNet won't accept).
+    const canIdentify = !isHeic || heicConverted;
+    if (canIdentify && (currentCategory() === 'plant' || currentCategory() === '')) {
+        identifyPlant(file);
     }
-    if (care.sunlight_needs) {
-        document.getElementById('sunlight_needs').value = care.sunlight_needs;
-    }
-    if (care.notes) {
-        const notesEl = document.getElementById('notes');
-        if (!notesEl.value) notesEl.value = care.notes;
-    }
-}
+});
+
+// "Tap to change" reopens the file picker
+document.getElementById('photo-change-btn').addEventListener('click', () => {
+    photoInput.value = '';
+    photoPreview.style.display = 'none';
+    photoDrop.style.display    = 'flex';
+    resetIdentify();
+    photoInput.click();
+});
 </script>
 @endsection
