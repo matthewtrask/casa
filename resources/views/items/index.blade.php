@@ -113,10 +113,12 @@
             @if ($item->location)
             <div class="item-card-location">📍 {{ $item->location }}</div>
             @endif
+            @if ($item->category !== 'pet')
             <span class="status-badge {{ $badgeClass }}">
                 <span class="status-dot"></span>
                 {{ $item->status }}
             </span>
+            @endif
         </div>
         <div class="item-card-footer">
             <a href="{{ route('items.show', $item) }}" class="btn btn-secondary">View</a>
