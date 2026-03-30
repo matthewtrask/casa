@@ -116,8 +116,9 @@
 
     .submit-row { display: flex; gap: 10px; align-items: center; margin-top: 8px; }
 
-    /* Plant fields hidden by default */
+    /* Fields hidden by default, shown per-category */
     .plant-field { display: none; }
+    .species-field { display: none; }
 </style>
 @endsection
 
@@ -155,21 +156,21 @@
 <div class="form-card">
     <div class="form-card-title">Basic info</div>
     <div class="form-group">
-        <label class="form-label" for="name">Nickname</label>
+        <label class="form-label" id="name-label" for="name">Nickname</label>
         <input type="text" id="name" name="name" class="form-input"
                value="{{ old('name') }}" placeholder="e.g. Art Blakey, Miles Davis, Vacuuming" required>
         @error('name') <p class="form-error">{{ $message }}</p> @enderror
     </div>
-    <div class="form-group">
-        <label class="form-label" for="location">Location</label>
-        <input type="text" id="location" name="location" class="form-input"
-               value="{{ old('location') }}" placeholder="e.g. Living room, Kitchen, Basement">
-        @error('location') <p class="form-error">{{ $message }}</p> @enderror
-    </div>
-    <div class="form-group plant-field" id="species-field">
-        <label class="form-label" for="species">Plant type</label>
+    <div class="form-group species-field" id="species-field">
+        <label class="form-label" id="species-label" for="species">Breed / Species</label>
         <input type="text" id="species" name="species" class="form-input"
-               value="{{ old('species') }}" placeholder="e.g. Snake Plant · Sansevieria trifasciata">
+               value="{{ old('species') }}" id="species-input" placeholder="e.g. Golden Retriever, Maine Coon">
+    </div>
+    <div class="form-group">
+        <label class="form-label" id="location-label" for="location">Location</label>
+        <input type="text" id="location" name="location" class="form-input"
+               value="{{ old('location') }}" id="location-input" placeholder="e.g. Living room, Kitchen, Basement">
+        @error('location') <p class="form-error">{{ $message }}</p> @enderror
     </div>
     <div class="form-group">
         <label class="form-label" for="action_frequency_days">How often?</label>
@@ -177,7 +178,7 @@
             <input type="number" id="action_frequency_days" name="action_frequency_days"
                    class="form-input freq-input"
                    value="{{ old('action_frequency_days', 7) }}" min="1" max="365" required>
-            <span class="freq-label">days between each action</span>
+            <span class="freq-label" id="freq-label">days between each action</span>
         </div>
         @error('action_frequency_days') <p class="form-error">{{ $message }}</p> @enderror
     </div>
@@ -240,16 +241,107 @@
 </div>
 
 <div class="submit-row">
-    <button type="submit" class="btn btn-primary btn-lg" style="flex:1">Add item</button>
+    <button type="submit" class="btn btn-primary btn-lg" style="flex:1">Add Item</button>
     <a href="{{ route('dashboard') }}" class="btn btn-secondary">Cancel</a>
 </div>
 </form>
 
 <script>
+const catConfig = {
+    plant: {
+        nameLabel: 'Nickname',
+        namePlaceholder: 'e.g. Art Blakey, Miles Davis, Coltrane',
+        locationLabel: 'Location',
+        locationPlaceholder: 'e.g. Living Room, Kitchen, Patio',
+        freqLabel: 'days between waterings',
+        notesPh: 'Anything useful to remember...',
+        submitLabel: 'Add Plant',
+        showSpecies: true,
+        speciesLabel: 'Plant type',
+        speciesPh: 'e.g. Snake Plant · Sansevieria trifasciata',
+    },
+    pet: {
+        nameLabel: "Pet's name",
+        namePlaceholder: 'e.g. Buddy, Whiskers, Mr. Fluffington',
+        locationLabel: 'Where do they sleep?',
+        locationPlaceholder: 'e.g. Bedroom, Backyard, Crate',
+        freqLabel: 'days between care check-ins',
+        notesPh: 'Vet info, medications, diet, favourite treats...',
+        submitLabel: 'Add Pet',
+        showSpecies: true,
+        speciesLabel: 'Breed / Species',
+        speciesPh: 'e.g. Golden Retriever, Maine Coon, Betta Fish',
+    },
+    chore: {
+        nameLabel: 'Chore name',
+        namePlaceholder: 'e.g. Vacuuming, Dishes, Laundry',
+        locationLabel: 'Where?',
+        locationPlaceholder: 'e.g. Living Room, Kitchen, Bathroom',
+        freqLabel: 'days between each chore',
+        notesPh: 'Any specific instructions...',
+        submitLabel: 'Add Chore',
+        showSpecies: false,
+    },
+    maintenance: {
+        nameLabel: 'Task name',
+        namePlaceholder: 'e.g. HVAC Filter, Gutters, Water Heater',
+        locationLabel: 'Location',
+        locationPlaceholder: 'e.g. Basement, Garage, Roof',
+        freqLabel: 'days between maintenance',
+        notesPh: 'Brand, model, service instructions...',
+        submitLabel: 'Add Task',
+        showSpecies: false,
+    },
+    other: {
+        nameLabel: 'Name',
+        namePlaceholder: 'e.g. Medication, Subscription renewal',
+        locationLabel: 'Location',
+        locationPlaceholder: 'e.g. Kitchen, Office',
+        freqLabel: 'days between each action',
+        notesPh: 'Anything useful to remember...',
+        submitLabel: 'Add Item',
+        showSpecies: false,
+    },
+};
+
 function selectCategory(cat) {
     document.getElementById('category-input').value = cat;
     document.querySelectorAll('.cat-btn').forEach(b => b.classList.remove('selected'));
     event.currentTarget.classList.add('selected');
+    applyCategory(cat);
+}
+
+function applyCategory(cat) {
+    const cfg = catConfig[cat] ?? catConfig['other'];
+
+    // Name
+    document.getElementById('name-label').textContent = cfg.nameLabel;
+    document.getElementById('name').placeholder = cfg.namePlaceholder;
+
+    // Location
+    document.getElementById('location-label').textContent = cfg.locationLabel;
+    document.getElementById('location').placeholder = cfg.locationPlaceholder;
+
+    // Species / Breed field
+    const speciesField = document.getElementById('species-field');
+    if (cfg.showSpecies) {
+        speciesField.style.display = '';
+        document.getElementById('species-label').textContent = cfg.speciesLabel;
+        document.getElementById('species').placeholder = cfg.speciesPh;
+    } else {
+        speciesField.style.display = 'none';
+    }
+
+    // Frequency label
+    document.getElementById('freq-label').textContent = cfg.freqLabel;
+
+    // Notes placeholder
+    document.querySelector('textarea[name="notes"]').placeholder = cfg.notesPh;
+
+    // Submit button
+    document.querySelector('.submit-row .btn-primary').textContent = cfg.submitLabel;
+
+    // Plant-only fields (sunlight card)
     const isPlant = cat === 'plant';
     document.querySelectorAll('.plant-field').forEach(el => {
         el.style.display = isPlant ? '' : 'none';
@@ -259,9 +351,7 @@ function selectCategory(cat) {
 // Init on page load
 (function() {
     const val = document.getElementById('category-input').value;
-    if (val === 'plant') {
-        document.querySelectorAll('.plant-field').forEach(el => el.style.display = '');
-    }
+    if (val) applyCategory(val);
 })();
 
 // Photo + plant identification
