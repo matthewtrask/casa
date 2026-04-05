@@ -80,6 +80,13 @@
     </div>
     @if ($item->isPlant())
     <div class="form-group">
+        <label class="form-label" for="location_detail">Specific spot <span style="font-weight:400; color:var(--text-muted)">(optional)</span></label>
+        <input type="text" id="location_detail" name="location_detail" class="form-input"
+               value="{{ old('location_detail', $item->location_detail) }}" placeholder="e.g. End table, Window sill, Corner shelf">
+    </div>
+    @endif
+    @if ($item->isPlant())
+    <div class="form-group">
         <label class="form-label" for="species">Species</label>
         <input type="text" id="species" name="species" class="form-input"
                value="{{ old('species', $item->species) }}" placeholder="e.g. Monstera deliciosa">

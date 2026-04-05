@@ -15,6 +15,7 @@ class TrackableItem extends Model
         'name',
         'species',
         'location',
+        'location_detail',
         'action_frequency_days',
         'category',
         'sunlight_needs',

@@ -2,9 +2,17 @@
 @section('title', 'Add Item')
 
 @push('scripts')
-<script type="module">
-    import { heicTo } from 'https://unpkg.com/heic-to@1.4.2/dist/heic-to.js';
-    window._heicTo = heicTo;
+<script>
+    // Lazy-load the heic-to WebAssembly library only when needed (plant category selected).
+    // It's ~1MB and unnecessary for chores, pets, etc.
+    let _heicToLoading = false;
+    function ensureHeicTo() {
+        if (window._heicTo || _heicToLoading) return;
+        _heicToLoading = true;
+        import('https://unpkg.com/heic-to@1.4.2/dist/heic-to.js').then(m => {
+            window._heicTo = m.heicTo;
+        });
+    }
 </script>
 @endpush
 
@@ -169,8 +177,13 @@
     <div class="form-group">
         <label class="form-label" id="location-label" for="location">Location</label>
         <input type="text" id="location" name="location" class="form-input"
-               value="{{ old('location') }}" id="location-input" placeholder="e.g. Living room, Kitchen, Basement">
+               value="{{ old('location') }}" placeholder="e.g. Living room, Kitchen, Basement">
         @error('location') <p class="form-error">{{ $message }}</p> @enderror
+    </div>
+    <div class="form-group plant-field" id="location-detail-field">
+        <label class="form-label" for="location_detail">Specific spot <span style="font-weight:400; color:var(--text-muted)">(optional)</span></label>
+        <input type="text" id="location_detail" name="location_detail" class="form-input"
+               value="{{ old('location_detail') }}" placeholder="e.g. End table, Window sill, Corner shelf">
     </div>
     <div class="form-group">
         <label class="form-label" for="action_frequency_days">How often?</label>
@@ -214,7 +227,7 @@
 <div class="form-card">
     <div class="form-card-title">📷 Photo</div>
     <div class="photo-upload" id="photo-drop">
-        <input type="file" name="photo" accept="image/jpeg,image/png,image/gif,image/webp,image/heic,image/heif,.heic,.heif,.jpg,.jpeg,.png" id="photo-input" capture="environment">
+        <input type="file" name="photo" accept="image/jpeg,image/png,image/gif,image/webp,image/heic,image/heif,.heic,.heif,.jpg,.jpeg,.png" id="photo-input">
         <div class="photo-upload-icon">📷</div>
         <div>
             <div class="photo-upload-text">Tap to take a photo or upload</div>
@@ -346,6 +359,9 @@ function applyCategory(cat) {
     document.querySelectorAll('.plant-field').forEach(el => {
         el.style.display = isPlant ? '' : 'none';
     });
+
+    // Pre-load heic-to when user selects plant, so it's ready by the time they pick a photo
+    if (isPlant) ensureHeicTo();
 }
 
 // Init on page load
@@ -401,12 +417,44 @@ function applyResult(card) {
     card.classList.add('selected');
 }
 
+// Resize a file to max 1600px on longest side before uploading for identification.
+// This cuts upload time significantly for large phone photos without affecting accuracy.
+async function resizeForIdentify(file) {
+    return new Promise(resolve => {
+        const img = new Image();
+        const url = URL.createObjectURL(file);
+        img.onload = () => {
+            let w = img.naturalWidth, h = img.naturalHeight;
+            const maxDim = 1600;
+            if (w <= maxDim && h <= maxDim) {
+                URL.revokeObjectURL(url);
+                resolve(file);
+                return;
+            }
+            const ratio = Math.min(maxDim / w, maxDim / h);
+            w = Math.round(w * ratio);
+            h = Math.round(h * ratio);
+            const canvas = document.createElement('canvas');
+            canvas.width = w; canvas.height = h;
+            canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+            URL.revokeObjectURL(url);
+            canvas.toBlob(
+                blob => resolve(blob ? new File([blob], file.name, { type: 'image/jpeg' }) : file),
+                'image/jpeg', 0.82
+            );
+        };
+        img.onerror = () => { URL.revokeObjectURL(url); resolve(file); };
+        img.src = url;
+    });
+}
+
 async function identifyPlant(file) {
     resetIdentify();
     identifyStatus.style.display = 'flex';
 
+    const uploadFile = await resizeForIdentify(file);
     const data = new FormData();
-    data.append('photo', file);
+    data.append('photo', uploadFile);
     data.append('_token', document.querySelector('meta[name="csrf-token"]').content);
 
     try {

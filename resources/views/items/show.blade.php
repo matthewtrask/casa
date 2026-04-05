@@ -199,7 +199,9 @@
     <div>
         <div class="item-name">{{ $item->name }}</div>
         @if ($item->location)
-        <div style="font-size:13px; color:var(--text-muted); margin-top:2px;">📍 {{ $item->location }}</div>
+        <div style="font-size:13px; color:var(--text-muted); margin-top:2px;">
+            📍 {{ $item->location }}{{ $item->location_detail ? ' — ' . $item->location_detail : '' }}
+        </div>
         @endif
     </div>
     <div class="item-header-actions">
@@ -217,6 +219,9 @@
     <div class="info-tile">
         <div class="info-tile-label">Location</div>
         <div class="info-tile-value">{{ $item->location ?: '—' }}</div>
+        @if ($item->location_detail)
+        <div style="font-size:12px; color:var(--text-muted); margin-top:3px;">{{ $item->location_detail }}</div>
+        @endif
     </div>
     <div class="info-tile">
         <div class="info-tile-label">Frequency</div>

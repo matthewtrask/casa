@@ -9,11 +9,30 @@ A Laravel 11 house management app. Tracks plants, chores, maintenance, pets, and
 Everything is a `TrackableItem`. Category is an enum column (`plant`, `chore`, `maintenance`, `pet`, `other`). Do **not** create separate models for new categories.
 
 ```
-TrackableItem        — name, location, category, action_frequency_days, last_action_at, image_path, notes, species, sunlight_needs
+TrackableItem        — name, location, location_detail, category, action_frequency_days,
+                       last_action_at, last_secondary_action_at, image_path, notes, species, sunlight_needs
   └── ActionLog[]    — action_type, performed_by, notes, created_at
 Setting              — key, value, label  (key-value store for app config, e.g. Slack channels)
 User                 — standard Laravel auth
 ```
+
+### Status logic
+
+Status is **computed, not stored** — never add a `status` column. The model derives it from `last_action_at + action_frequency_days` vs. today:
+
+| CSS class | Meaning |
+|---|---|
+| `status-ok` | Not due yet |
+| `status-warning` | 1–3 days overdue |
+| `status-critical` | 4+ days overdue |
+
+Key model methods: `isDue()`, `getDaysOverdue()`, `getStatusAttribute()`, `getStatusCssClass()`.
+
+### Category special cases
+
+- **Maintenance items** default to `last_action_at = today` and `action_frequency_days = 3650` (10 years) — they're used for one-time event logging, not recurring tasks.
+- **Plants & pets** show a `species` field; other categories do not.
+- **Plants** show `sunlight_needs`, `location_detail`, and the plant identification UI; other categories do not.
 
 ### Key files
 
@@ -77,6 +96,26 @@ Photos are stored to the configured filesystem disk (DO Spaces in production). H
 3. `PlantLookupController@identify` sends to PlantNet → gets top 3 species matches
 4. Top result is enriched with Perenual care data (watering frequency, sunlight)
 5. Results are shown as cards; clicking one auto-fills the form fields
+
+## UI conventions
+
+### Category colors
+Each category has a consistent color used across cards, badges, and nav:
+
+| Category | Color | Hex |
+|---|---|---|
+| plant | green | `#16a34a` |
+| chore | blue | `#3b82f6` |
+| maintenance | amber | `#f59e0b` |
+| pet | purple | `#8b5cf6` |
+| other | slate | `#64748b` |
+
+### Fonts
+- Display / headings: **Lora** (serif)
+- Body: **DM Sans** (sans-serif)
+
+### Responsive breakpoints
+500px, 600px, 900px. Sidebar nav on desktop; bottom nav bar on mobile.
 
 ## Legacy code — do not use or extend
 
