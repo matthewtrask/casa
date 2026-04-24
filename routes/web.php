@@ -27,6 +27,7 @@ Route::middleware('auth')->group(function () {
 
     Route::redirect('/', '/dashboard');
     Route::get('/dashboard', [TrackableItemController::class, 'dashboard'])->name('dashboard');
+    Route::post('/items/bulk-action', [ActionLogController::class, 'bulkStore'])->name('items.bulk-action');
     Route::resource('items', TrackableItemController::class);
     Route::post('/items/{item}/action', [ActionLogController::class, 'store'])->name('items.action');
 
